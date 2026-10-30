@@ -1,6 +1,7 @@
 resources:
   - ../../base
 
-commonLabels:
-  environment: dev
-  managed-by: argocd
+labels:
+  - pairs:
+      environment: dev
+      managed-by: argocd

@@ -2,6 +2,7 @@ resources:
   - ../../base
   - tenant-dev-limit-range.yaml
 
-commonLabels:
-  environment: dev
-  managed-by: argocd
+labels:
+  - pairs:
+      environment: dev
+      managed-by: argocd

@@ -3,6 +3,7 @@ resources:
   - tenant-prod-resource-quota.yaml
   - tenant-prod-limit-range.yaml
 
-commonLabels:
-  environment: prod
-  managed-by: argocd
+labels:
+  - pairs:
+      environment: prod
+      managed-by: argocd
