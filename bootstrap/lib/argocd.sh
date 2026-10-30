@@ -7,10 +7,10 @@
 #   apply_root_app <hub-ctx>
 #   print_argocd_access <hub-ctx>
 
-# Pinned Helm chart version for argo/argo-cd (chart 7.7.x ships Argo CD v2.13).
+# Pinned Helm chart version for argo/argo-cd (chart 10.11.x ships Argo CD v3.5).
 # Renovate bumps this line (regex manager in renovate.json); keep the exact form:
 #   ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-X.Y.Z}"
-ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-7.7.11}"
+ARGOCD_CHART_VERSION="${ARGOCD_CHART_VERSION:-10.11.6}"
 ARGOCD_NAMESPACE="${ARGOCD_NAMESPACE:-argocd}"
 ARGOCD_RELEASE="${ARGOCD_RELEASE:-argocd}"
 ARGOCD_HELM_REPO="${ARGOCD_HELM_REPO:-https://argoproj.github.io/argo-helm}"

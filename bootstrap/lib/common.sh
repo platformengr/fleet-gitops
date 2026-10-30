@@ -49,6 +49,7 @@ is_dry_run() { [[ "${DRY_RUN}" == "1" ]]; }
 # _print_cmd ARGS...  prints a shell-quoted command line.
 _print_cmd() {
   local out="" a
+  if [[ $# -eq 1 && "$1" == "#"* ]]; then printf '%s+ %s%s\n' "${_c_dim}" "$1" "${_c_reset}" >&2; return 0; fi
   for a in "$@"; do
     if [[ "$a" =~ ^[A-Za-z0-9_./:=@%+,-]+$ ]]; then out+="$a "; else out+="$(printf '%q' "$a") "; fi
   done
@@ -86,8 +87,9 @@ run_stdin() {
 capture() {
   local placeholder="$1"; shift
   if is_dry_run; then
-    if command -v "$1" >/dev/null 2>&1 && "$@" 2>/dev/null; then return 0; fi
-    printf '%s' "$placeholder"
+    local out=""
+    if command -v "$1" >/dev/null 2>&1; then out="$("$@" 2>/dev/null || true)"; fi
+    printf '%s' "${out:-$placeholder}"
     return 0
   fi
   "$@"
