@@ -1,49 +1,62 @@
-# Fleet GitOps Reference
+# Fleet GitOps
 
-This repository is a compact Kubernetes fleet example for developers who already know the basics: clusters, Namespaces, Pods, Services, Helm, Kustomize, and the idea of an Argo CD Application.
+**A hands-on course and reference repo for running a fleet of Kubernetes clusters with GitOps.** You start with one Argo CD Application on a laptop cluster. You finish with a production-shaped hub-and-spoke fleet on kind, AKS, EKS or GKE: add-ons, tenant guardrails, observability, progressive delivery, secrets and identity.
 
-The goal is to show how one Git repo can describe a small multi-cluster platform without making every team write raw platform manifests.
+> This started as a hands-on workshop I ran for [PlatformEngr](https://www.platformengr.com/). Attendees kept asking for the material afterwards, so I cleaned it up and made it public. I hope it saves you some of the hours it cost us. — [Daniel Abrahamberg](https://www.abrahamberg.com/)
 
-## What Fleet Means Here
+## Three ways in
 
-A fleet is a set of Kubernetes clusters managed from one control point. In this example:
+| You want to... | Go here |
+| --- | --- |
+| **Learn it step by step**, with progress tracking, quizzes and a fleet map that grows as you go | The interactive workshop: [`site/index.html`](site/index.html) (published at `https://abrahamberg.github.io/fleet-gitops/` once Pages is on) |
+| **Read the course** in Markdown, module by module | [`course/`](course/README.md) |
+| **Just get a fleet running** with a few commands | The quickstart generator: [`site/quickstart.html`](site/quickstart.html), or [`bootstrap/`](bootstrap/README.md) directly |
 
-- The platform cluster runs Argo CD, Grafana, and Loki.
-- The workload clusters are `dev` and `prod`.
-- Cluster metadata lives in [clusters/](clusters/).
-- Argo CD ApplicationSets in [applicationsets/](applicationsets/) generate one or more Argo CD Applications per cluster.
-- Platform add-ons, policies, tenant namespaces, observability agents, and sample workloads are all driven from the same cluster inventory.
+## The course at a glance
 
-## Architecture At A Glance
+| Level | Modules | You leave with |
+| --- | --- | --- |
+| 1 Foundations | [00 Welcome](course/00-welcome.md) · [01 GitOps in one cluster](course/01-gitops-in-one-cluster.md) · [02 App of apps](course/02-app-of-apps.md) | Argo CD reconciling Git, drift that heals itself, one root app for everything |
+| 2 Fleet | [03 Fleet inventory](course/03-fleet-inventory.md) · [04 ApplicationSets](course/04-applicationsets.md) · [05 Add-ons and sync waves](course/05-addons-and-sync-waves.md) | A hub managing `dev` and `prod` from `clusters/*.yaml`, with the same add-ons everywhere |
+| 3 Platform | [06 Tenants and guardrails](course/06-tenants-and-guardrails.md) · [07 Observability](course/07-observability.md) · [08 Progressive delivery](course/08-progressive-delivery.md) | Self-service namespaces by PR, central logs, changes that roll dev-then-prod |
+| 4 Production | [09 Secrets and identity](course/09-secrets-and-identity.md) · [10 Going to cloud](course/10-going-to-cloud.md) · [11 Production checklist](course/11-production-checklist.md) | No long-lived credentials, HA Argo CD, CI validation, a day-2 runbook |
+
+My advice: do levels 1 to 3 on kind even if you'll end up in a cloud. Mistakes are free there.
+
+## Quick start (kind)
+
+Prerequisites: Docker, `kind`, `kubectl`, `helm`, `git`.
+
+```bash
+# Fork this repo first: Argo CD reads Git, not your laptop.
+git clone https://github.com/<you>/fleet-gitops.git && cd fleet-gitops
+scripts/set-repo-url.sh https://github.com/<you>/fleet-gitops.git
+git commit -am "Point Argo CD at my fork" && git push
+
+bootstrap/kind/up.sh --dry-run   # read what it will do
+bootstrap/kind/up.sh             # platform + dev + prod clusters, Argo CD, root app
+```
+
+For AKS, EKS or GKE: `cp bootstrap/<cloud>/env.example bootstrap/<cloud>/env`, edit it, then run `bootstrap/<cloud>/up.sh --dry-run`. Cloud clusters cost money, so tear them down with `bootstrap/<cloud>/down.sh` when you're done. The [manual kind walkthrough](docs/local-kind-setup.md) shows every step the script automates.
+
+## How the fleet works
 
 ```text
-Git repository
+Git repository (your fork)
 	|
 	| root-app.yaml
 	v
-Argo CD on the platform cluster
+Argo CD on the hub / platform cluster
 	|
 	| reads applicationsets/
 	v
-Generated Argo CD Applications
-	|-- dev cluster: namespaces, Helm add-ons, Kyverno policies, tenants, examples
-	|-- prod cluster: namespaces, Helm add-ons, Kyverno policies, tenants, examples
-	|-- platform cluster: Grafana and Loki
+Generated Argo CD Applications, one set per file in clusters/
+	|-- dev:  namespaces, Helm add-ons, Kyverno policies, tenants, Alloy agent, examples
+	|-- prod: namespaces, Helm add-ons, Kyverno policies, tenants, Alloy agent, examples
+	|-- hub:  Loki and Grafana
 ```
 
-The important idea: add or change fleet inputs in Git, then Argo CD generates the per-cluster Applications.
-
-## Fast Reading Path
-
-Read these in order if you want the whole repo quickly:
-
-1. [docs/README.md](docs/README.md) for the documentation map.
-2. [docs/fleet-architecture.md](docs/fleet-architecture.md) for the sync flow and platform/workload split.
-3. [clusters/README.md](clusters/README.md) for the fleet inventory fields.
-4. [applicationsets/README.md](applicationsets/README.md) for how Applications are generated.
-5. [addons/README.md](addons/README.md) for platform add-ons.
-6. [requests/namespaces/README.md](requests/namespaces/README.md) for the user-facing namespace request format.
-7. [docs/kustomize-overlays.md](docs/kustomize-overlays.md) for how the `kustomization.yaml` files work in this sample.
+Change fleet inputs in Git; Argo CD generates the per-cluster Applications. The [architecture page](docs/fleet-architecture.md) has the sync flow, and [docs/](docs/README.md) maps every folder.
 
 ## Key Files
 
@@ -58,66 +71,15 @@ Read these in order if you want the whole repo quickly:
 | Policy model | [addons/kyverno-policies/README.md](addons/kyverno-policies/README.md) | How Kyverno reacts to namespace labels. |
 | Workload example | [examples/guestbook-rollout/README.md](examples/guestbook-rollout/README.md) | A sample app deployed across the fleet. |
 
-## Run A Local Multi-Cluster Demo With Kind
+## Repository Hygiene Included
 
-For the cleanest local run, use a fork of this repo. Argo CD syncs from Git, so local-only edits are not enough unless your Argo CD instance can read them from a Git remote.
-
-Prerequisites: Docker, `kind`, `kubectl`, `argocd`, `git`, and `perl`.
-
-```bash
-# 1. Create one platform cluster and two workload clusters.
-kind create cluster --name platform
-kind create cluster --name dev
-kind create cluster --name prod
-
-# 2. Install Argo CD on the platform cluster.
-kubectl --context kind-platform create namespace argocd
-kubectl --context kind-platform apply -n argocd \
-	-f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-kubectl --context kind-platform -n argocd rollout status deploy/argocd-server
-kubectl --context kind-platform -n argocd rollout status deploy/argocd-repo-server
-kubectl --context kind-platform -n argocd rollout status deploy/argocd-applicationset-controller
-kubectl --context kind-platform -n argocd rollout status statefulset/argocd-application-controller
-
-# 3. Point the repo at your fork, then push the change.
-export REPO_URL="https://github.com/YOUR_ORG/fleet-gitops.git"
-perl -pi -e "s#https://github.com/abrahamberg/fleet-gitops.git#$REPO_URL#g" root-app.yaml applicationsets/*.yaml
-
-# 4. Point the cluster inventory at the local kind API servers.
-DEV_API="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' dev-control-plane)"
-PROD_API="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' prod-control-plane)"
-sed -i "s#^server:.*#server: https://${DEV_API}:6443#" clusters/dev.yaml
-sed -i "s#^server:.*#server: https://${PROD_API}:6443#" clusters/prod.yaml
-git add root-app.yaml applicationsets clusters/dev.yaml clusters/prod.yaml
-git commit -m "Configure local kind fleet"
-git push
-```
-
-In another terminal, port-forward Argo CD and register the workload clusters with the same server URLs used in [clusters/dev.yaml](clusters/dev.yaml) and [clusters/prod.yaml](clusters/prod.yaml):
-
-```bash
-kubectl --context kind-platform -n argocd port-forward svc/argocd-server 8080:443
-```
-
-```bash
-ARGOCD_PASSWORD="$(kubectl --context kind-platform -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)"
-argocd login localhost:8080 --username admin --password "$ARGOCD_PASSWORD" --insecure
-
-kind get kubeconfig --name dev > /tmp/kind-dev.kubeconfig
-kind get kubeconfig --name prod > /tmp/kind-prod.kubeconfig
-DEV_API="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' dev-control-plane)"
-PROD_API="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' prod-control-plane)"
-kubectl --kubeconfig /tmp/kind-dev.kubeconfig config set-cluster kind-dev --server="https://${DEV_API}:6443"
-kubectl --kubeconfig /tmp/kind-prod.kubeconfig config set-cluster kind-prod --server="https://${PROD_API}:6443"
-KUBECONFIG=/tmp/kind-dev.kubeconfig argocd cluster add kind-dev --name dev --yes
-KUBECONFIG=/tmp/kind-prod.kubeconfig argocd cluster add kind-prod --name prod --yes
-
-kubectl --context kind-platform apply -f root-app.yaml
-kubectl --context kind-platform -n argocd get applicationsets
-kubectl --context kind-platform -n argocd get applications
-```
-
-Detailed setup notes and cleanup commands are in [docs/local-kind-setup.md](docs/local-kind-setup.md).
+| What | Where | Why |
+| --- | --- | --- |
+| Manifest validation | [scripts/validate.sh](scripts/validate.sh), [.github/workflows/validate.yaml](.github/workflows/validate.yaml) | `kustomize build`, `helm template` and `kubeconform` on every PR, so Argo CD never sees broken YAML. |
+| Dependency updates | [renovate.json](renovate.json) | Chart versions stay pinned and get bumped in reviewable PRs. |
+| Review boundaries | [.github/CODEOWNERS](.github/CODEOWNERS), [PR template](.github/pull_request_template.md) | Platform review for inventory, policies and namespace lifecycle. |
+| Workshop site | [.github/workflows/pages.yaml](.github/workflows/pages.yaml) | Publishes `site/` to GitHub Pages. |
+| Moving the repo | [scripts/set-repo-url.sh](scripts/set-repo-url.sh) | Rewrites every `repoURL` in one go for a fork or a new home. |
 
 ## Safety Notes
 
@@ -136,3 +98,9 @@ Detailed setup notes and cleanup commands are in [docs/local-kind-setup.md](docs
 | Add a Helm add-on | Add an element in [applicationsets/platform-helm-addons-appset.yaml](applicationsets/platform-helm-addons-appset.yaml). | The matrix generator installs that chart once per cluster. |
 | Add tenant policy | Add a Kyverno policy and include it from a Kustomize overlay under [addons/kyverno-policies/](addons/kyverno-policies/). | Kyverno matches tenant namespace labels and generates or mutates resources. |
 | Add a workload example | Add manifests under [examples/](examples/) and an ApplicationSet under [applicationsets/](applicationsets/). | The workload can deploy across the same cluster inventory. |
+
+## About
+
+Written and maintained by [Daniel Abrahamberg](https://www.abrahamberg.com/) ([GitHub](https://github.com/abrahamberg), [LinkedIn](https://www.linkedin.com/in/abrahamberg/)). The material was first delivered as a workshop with [PlatformEngr](https://www.platformengr.com/), which helps growing teams build and run their internal platforms.
+
+Found a mistake or have an idea? Issues and PRs are welcome.

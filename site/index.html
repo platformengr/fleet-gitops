@@ -118,10 +118,10 @@ main { min-width: 0; padding: 32px 32px 64px; }
 .hero h1 { font-size: clamp(30px, 5vw, 48px); margin: 8px 0 14px; font-weight: 800; }
 .hero h1 .grad { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .hero .lede { font-size: 18px; color: var(--muted); max-width: 640px; margin: 0 0 24px; }
-.track-picker { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin: 12px 0 20px; border: 0; padding: 0; }
+.track-picker { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin: 12px 0 20px; border: 0; padding: 0; }
 .track-picker legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .track-opt { position: relative; }
-.track-opt input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.track-opt input { position: absolute; opacity: 0; inset: 0; pointer-events: none; }
 .track-opt label { display: block; padding: 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; height: 100%; }
 .track-opt label b { display: block; font-size: 16px; }
 .track-opt label span { font-size: 13px; color: var(--muted); }
@@ -146,6 +146,7 @@ main { min-width: 0; padding: 32px 32px 64px; }
 section.block { margin: 32px 0; }
 section.block > h2 { font-size: 20px; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
 .diagram-card { padding: 14px; }
+.diagram-card .fleet { max-width: 620px; margin: 0 auto; }
 .diagram-card figcaption { font-size: 13px; color: var(--muted); padding: 6px 6px 0; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .concept { padding: 16px; }
@@ -583,8 +584,9 @@ git commit -am "Inventory: {CLOUD} endpoints" && git push` } },
       d: 'register_spoke creates a ServiceAccount on the spoke and a declarative cluster Secret on the hub, with environment labels.',
       cmd: { kind: sh`source bootstrap/lib/common.sh
 source bootstrap/lib/argocd.sh
-register_spoke kind-platform kind-dev dev dev
-register_spoke kind-platform kind-prod prod prod`,
+# Pass the Docker-network API address: the hub cannot reach 127.0.0.1 of another kind cluster.
+register_spoke kind-platform kind-dev dev dev "https://$DEV_API:6443" 0
+register_spoke kind-platform kind-prod prod prod "https://$PROD_API:6443" 1`,
         cloud: sh`# up.sh already registered dev and prod. Nothing to do here.` } },
     { t: 'Verify the hub sees the fleet',
       cmd: sh`kubectl --context {HUB} -n argocd get secrets \
@@ -1114,7 +1116,8 @@ function copyText(text, btn) {
 function toast(title, body) {
   const el = document.createElement('div'); el.className = 'toast';
   el.innerHTML = '<b>' + esc(title) + '</b>' + esc(body || '');
-  $('#toasts').appendChild(el);
+  const box = $('#toasts'); box.appendChild(el);
+  while (box.children.length > 3) box.firstChild.remove();
   setTimeout(() => el.remove(), 4200);
 }
 function confetti() {
@@ -1155,6 +1158,9 @@ function fleetSVG(on, hi, track, opts = {}) {
   if (on.size === 0) {
     g += '<rect class="ghost" x="20" y="20" width="360" height="240" rx="16"/><text class="empty" x="200" y="138" text-anchor="middle">Your fleet starts here</text>';
   }
+  // ghosts: outlines of what is still to come
+  if (on.size && !has(1)) g += '<rect class="ghost" x="150" y="14" width="236" height="96" rx="12"/><text class="t-muted" x="268" y="66" font-size="11" text-anchor="middle">hub (module 01)</text>';
+  if (on.size && !has(3)) [16, 214].forEach(x => { g += '<rect class="ghost" x="' + x + '" y="168" width="170" height="104" rx="12"/><text class="t-muted" x="' + (x + 85) + '" y="224" font-size="11" text-anchor="middle">' + (x < 100 ? 'dev' : 'prod') + ' spoke (module 03)</text>'; });
   // 11: HA shadows behind hub
   if (has(11)) g += '<g ' + cls(11) + '><rect class="node" x="158" y="22" width="236" height="96" rx="12" opacity=".45"/><rect class="node" x="154" y="18" width="236" height="96" rx="12" opacity=".7"/></g>';
   // 0: git repo
@@ -1223,12 +1229,12 @@ function fleetSVG(on, hi, track, opts = {}) {
   if (has(10)) {
     g += '<g ' + cls(10) + '>';
     const tag = (x, y) => { const w = provLabel.length * 6 + 10; return '<rect class="prov" x="' + (x - w) + '" y="' + y + '" width="' + w + '" height="14" rx="4"/><text class="provt" x="' + (x - w + 5) + '" y="' + (y + 10) + '">' + esc(provLabel) + '</text>'; };
-    if (has(1)) g += tag(376, 22);
+    if (has(1)) g += tag(364, 22);
     if (has(3)) spokes.forEach(s => { g += tag(s.x + 108, 177); });
     g += '</g>';
   }
   // 11: prod seal
-  if (has(11) && has(1)) g += '<g ' + cls(11) + '><circle class="seal" cx="386" cy="16" r="13"/><path d="M380 16l4 4 8-8" fill="none" stroke="var(--on-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' + chip(322, 88, 'HA x3').replace('x="322"', 'x="322"') + '</g>';
+  if (has(11) && has(1)) g += '<g ' + cls(11) + '><circle class="seal" cx="386" cy="16" r="13"/><path d="M380 16l4 4 8-8" fill="none" stroke="var(--on-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' + chip(240, 88, 'HA x3') + '</g>';
 
   const title = opts.title || 'Fleet diagram';
   return '<svg class="fleet" viewBox="0 0 404 280" role="img" aria-label="' + esc(title) + '">' +
