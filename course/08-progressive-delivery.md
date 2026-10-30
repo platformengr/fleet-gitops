@@ -118,7 +118,7 @@ kubectl --context kind-platform -n argocd patch configmap argocd-cmd-params-cm -
 kubectl --context kind-platform -n argocd rollout restart deploy/argocd-applicationset-controller
 ```
 
-(If you installed with Helm via `bootstrap/kind/up.sh`, put this in the values file instead, or Helm will undo it on the next upgrade.)
+(If you installed with `bootstrap/kind/up.sh`, this is already on: see `configs.params` in [bootstrap/argocd/values-local.yaml](../bootstrap/argocd/values-local.yaml). Skip the patch; with Helm installs, change the values file, not the ConfigMap, or Helm undoes it on the next upgrade.)
 
 Save as `/tmp/guestbook-rolling.yaml`, replacing `REPO_URL`:
 
