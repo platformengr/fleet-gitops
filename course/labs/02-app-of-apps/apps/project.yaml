@@ -1,0 +1,22 @@
+# The boundary: child apps in this project may only read this repo
+# and only deploy namespaced resources into lab-* namespaces on the hub.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: course-lab
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Course lab boundary
+  sourceRepos:
+    - https://github.com/abrahamberg/fleet-gitops.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: 'lab-*'
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

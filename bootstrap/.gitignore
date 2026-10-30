@@ -1,0 +1,3 @@
+# Local settings and rendered configs from the bootstrap scripts
+*/env
+eks/.generated/

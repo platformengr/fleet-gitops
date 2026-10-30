@@ -1,0 +1,19 @@
+# Lab 02: the only thing you apply by hand. Everything else comes from Git.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lab-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/abrahamberg/fleet-gitops.git
+    targetRevision: main
+    path: course/labs/02-app-of-apps/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

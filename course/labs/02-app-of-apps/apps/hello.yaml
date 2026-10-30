@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lab-hello
+  namespace: argocd
+spec:
+  project: course-lab
+  source:
+    repoURL: https://github.com/abrahamberg/fleet-gitops.git
+    targetRevision: main
+    path: course/labs/01-single-app/app
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lab-hello
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
