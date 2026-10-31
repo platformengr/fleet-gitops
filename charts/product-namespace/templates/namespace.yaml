@@ -1,0 +1,21 @@
+{{- $pss := .Values.product.podSecurity | default "restricted" }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "pn.name" . }}
+  labels:
+    {{- include "pn.labels" . | nindent 4 }}
+    fleet.gitops/type: product
+    pod-security.kubernetes.io/enforce: {{ $pss }}
+    pod-security.kubernetes.io/audit: {{ $pss }}
+    pod-security.kubernetes.io/warn: {{ $pss }}
+  annotations:
+    # Removing the product must not silently delete its data: Argo CD leaves
+    # the namespace in place; deleting it is a reviewed platform step.
+    argocd.argoproj.io/sync-options: Prune=false
+    {{- with .Values.product.request }}
+    fleet.gitops/request: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.product.description }}
+    fleet.gitops/description: {{ . | quote }}
+    {{- end }}

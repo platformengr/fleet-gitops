@@ -1,79 +1,126 @@
 # Fleet GitOps
 
-**A reference repository for running a fleet of Kubernetes clusters with Argo CD.** One hub cluster generates and manages the Applications for every workload cluster from a Git inventory: platform add-ons, tenant namespaces with guardrails, observability agents and sample workloads.
+**A reference implementation of a small fleet GitOps platform: how a platform team runs clusters with Terraform and Argo CD, and how product teams onboard and ship through pull requests.**
 
-This repo is the hands-on half of a free course by [PlatformEngr](https://www.platformengr.com/), written by [Daniel Abrahamberg](https://www.abrahamberg.com/). It started as a workshop and is now public.
-
-> **Learn it step by step:** the guided workshop, the Markdown course and a script generator for kind, AKS, EKS and GKE live at **https://www.platformengr.com/learn/fleet-gitops/**. This repo is what you fork, clone or recreate as you follow along.
-
-## Use it
-
-| Path | How |
-| --- | --- |
-| **Fork and explore** | Fork this repo, clone your fork, then run `scripts/set-repo-url.sh <your-fork-url>` and push. Argo CD reads from Git, so it needs a repo you can push to. |
-| **Build your own** | Create an empty repo and add the files as the course introduces them. Every file you need is in this repo as the reference answer. |
-
-Either way, the course's bootstrap scripts create the clusters and install Argo CD, and apply `root-app.yaml` from your repo.
-
-## How the fleet works
+It is the finished state of the free [Fleet GitOps course](https://www.platformengr.com/learn/fleet-gitops/) by [PlatformEngr](https://www.platformengr.com/), written by [Daniel Abrahamberg](https://www.abrahamberg.com/). Everything runs on your laptop with kind; the same repo runs on AKS, EKS, GKE or any existing cluster.
 
 ```text
-Git repository (your fork)
-	|
-	| root-app.yaml
-	v
-Argo CD on the hub / platform cluster
-	|
-	| reads applicationsets/
-	v
-Generated Argo CD Applications, one set per file in clusters/
-	|-- dev:  namespaces, Helm add-ons, Kyverno policies, tenants, Alloy agent, examples
-	|-- prod: namespaces, Helm add-ons, Kyverno policies, tenants, Alloy agent, examples
-	|-- hub:  Loki and Grafana
+ Issue ──> pull request ──> CI: validate + fleet plan ──> review (+ production approval) ──> merge
+                                                                                          │
+   ┌──────────────────────────────────────────────────────────────────────────────────────┘
+   v
+ Git (this repo) ──pull──> Argo CD on the hub ──> dev cluster ──> checkout-dev   (healthy)
+                                              └─> prod cluster ─> checkout-prod  (healthy)
 ```
 
-Change fleet inputs in Git; Argo CD generates the per-cluster Applications. [docs/fleet-architecture.md](docs/fleet-architecture.md) has the sync flow, and [docs/](docs/README.md) maps every folder.
+## Four things, and how they relate
 
-## Key Files
-
-| Area | Start here | What it teaches |
+| | What it is | Where |
 | --- | --- | --- |
-| Bootstrap | [root-app.yaml](root-app.yaml) | App-of-apps entry point applied to the Argo CD cluster. |
-| Fleet inventory | [clusters/dev.yaml](clusters/dev.yaml), [clusters/prod.yaml](clusters/prod.yaml) | Cluster name, API server, environment, region, upgrade wave, and Loki endpoint. |
-| Application generation | [applicationsets/README.md](applicationsets/README.md) | Git, list, matrix, and selector generators. |
-| Platform add-ons | [addons/README.md](addons/README.md) | Namespaces, Helm add-ons, Kyverno, and observability agents. |
-| Tenant namespace requests | [requests/namespaces/product-a.yaml](requests/namespaces/product-a.yaml) | Small YAML interface for teams requesting namespaces. |
-| Tenant namespace chart | [charts/tenant-namespace/README.md](charts/tenant-namespace/README.md) | How request YAML becomes a Kubernetes Namespace. |
-| Policy model | [addons/kyverno-policies/README.md](addons/kyverno-policies/README.md) | How Kyverno reacts to namespace labels. |
-| Workload example | [examples/guestbook-rollout/README.md](examples/guestbook-rollout/README.md) | A sample app deployed across the fleet. |
+| **Reference repo** | This repo: the completed implementation. Read it, compare with it, copy folders from it. | `github.com/platformengr/fleet-gitops` |
+| **Your repo** | The repo *you* operate. Argo CD watches it, so it must be yours. | Created from this one (template) or built up folder by folder in the course |
+| **Quick start** | 30 minutes: create your repo from this template, `terraform apply`, onboard a product, see it run. | [platformengr.com/learn/fleet-gitops/quickstart.html](https://www.platformengr.com/learn/fleet-gitops/quickstart.html) |
+| **Full course** | 13 modules that build every piece in order, as platform team and as product team, through issues and pull requests. | [platformengr.com/learn/fleet-gitops/](https://www.platformengr.com/learn/fleet-gitops/) |
 
-## Included Repository Hygiene
+There is no separate download: the Terraform and the cloud scripts live in [infrastructure/](infrastructure/) in this repo.
 
-| What | Where | Why |
+## Quick start (kind)
+
+Needs Docker, [kind](https://kind.sigs.k8s.io/), kubectl, Terraform ≥ 1.6 and Python 3.
+
+1. On GitHub: **Use this template → Create a new repository** (public, so Argo CD can read it without credentials). Clone it.
+2. Point the fleet at your repo, check it, push:
+   ```bash
+   scripts/set-repo-url.sh https://github.com/<you>/<repo>.git --codeowners @<you>
+   scripts/validate.sh        # optional locally, CI runs it on every PR
+   git commit -am "Point the fleet at my repo" && git push
+   ```
+3. Create the clusters and hand them to Git:
+   ```bash
+   cd infrastructure/kind && terraform init && terraform apply
+   kubectl --context kind-platform -n argocd get applications -w
+   ```
+4. Open the Argo CD UI with the commands `terraform output next_steps` prints. Within a few minutes `checkout-dev` and `checkout-prod` are Synced and Healthy.
+
+The course page personalises every command with your GitHub user and repo name.
+
+## How the repo is organised
+
+Folders map to owners. In a larger organisation the three groups are three repositories (`infrastructure-live`, `platform-fleet`, `<product>-deployment`); here they are folders, so the workshop needs one repo, and [CODEOWNERS](.github/CODEOWNERS) keeps the boundaries.
+
+| Folder | Owner | What it holds |
 | --- | --- | --- |
-| Manifest validation | [scripts/validate.sh](scripts/validate.sh), [.github/workflows/validate.yaml](.github/workflows/validate.yaml) | `kustomize build`, `helm template` and `kubeconform` on every PR, so Argo CD never sees broken YAML. |
-| Dependency updates | [renovate.json](renovate.json) | Chart versions stay pinned and get bumped in reviewable PRs. |
-| Review boundaries | [.github/CODEOWNERS](.github/CODEOWNERS), [PR template](.github/pull_request_template.md) | Platform review for inventory, policies and namespace lifecycle. |
-| Pointing at your repo | [scripts/set-repo-url.sh](scripts/set-repo-url.sh) | Rewrites every `repoURL` in one go for a fork or a new home. |
+| [infrastructure/](infrastructure/) | Platform | Terraform: clusters, Argo CD install, cluster registration, root app. Cloud scripts. |
+| [clusters/](clusters/) | Platform | The fleet inventory: one file per workload cluster. Drives Terraform and the ApplicationSets. |
+| [root-app.yaml](root-app.yaml), [applicationsets/](applicationsets/) | Platform | What Argo CD generates for every cluster and every product. |
+| [addons/](addons/), [charts/](charts/) | Platform | Add-ons, Kyverno guardrails, the namespace baseline chart. |
+| [products/](products/) | Product proposes, platform approves | One `product.yaml` per product: the self-service onboarding request. |
+| [product-deployments/](product-deployments/) | Product team | Kustomize config per product and environment. |
+| [.github/](.github/) | Platform | Issue forms, PR template, CI, production gate, deployment records. |
+| [scripts/](scripts/) | Platform | `validate.sh`, `fleet_check.py`, `set-repo-url.sh`, `trace.sh`. |
+| [docs/](docs/) | Platform | Architecture, operating model, runbooks. |
 
-## Safety Notes
+## The bootstrap chain
 
-- The sample uses automated sync and prune so the behavior is visible. Deleting a namespace request can delete the namespace and the resources inside it.
-- Local kind API server IPs can change when clusters are recreated. Update [clusters/dev.yaml](clusters/dev.yaml), [clusters/prod.yaml](clusters/prod.yaml), and the Argo CD cluster registrations together.
-- The observability endpoint in each cluster file is intentionally simple. Real clusters need a reachable Loki endpoint across cluster boundaries.
-- Before using this pattern for real teams, add branch protection, CODEOWNERS, request schema validation, chart value review, and a reviewed namespace deletion process.
+```text
+clusters/*.yaml ──> terraform apply (infrastructure/kind)
+                      ├─ kind clusters: platform (hub), dev, prod
+                      ├─ Argo CD on the hub (Helm)
+                      ├─ cluster Secrets, labelled from the inventory
+                      └─ root Application (root-app.yaml)
+                              └─> applicationsets/  (Argo CD, from Git, forever after)
+                                    ├─ per cluster:  namespaces, Helm add-ons, Kyverno policies, log agent
+                                    ├─ hub:          Loki + Grafana
+                                    └─ per product:  AppProject, namespace baseline per env, app per env
+```
 
-## Common Changes
+Terraform runs once per cluster change; after that every change is a pull request. See [infrastructure/README.md](infrastructure/README.md).
 
-| Change | File to edit | What happens |
-| --- | --- | --- |
-| Add a cluster | Add a file under [clusters/](clusters/) and register that cluster in Argo CD. | ApplicationSets generate the platform add-ons, policies, agents, and examples for the new cluster. |
-| Add a tenant namespace | Add a request under [requests/namespaces/](requests/namespaces/). | The tenant namespace chart creates the namespace only in the requested environments. |
-| Add a platform namespace | Edit [addons/namespaces/base/platform-namespaces.yaml](addons/namespaces/base/platform-namespaces.yaml). | The namespace appears on every cluster through the environment overlays. |
-| Add a Helm add-on | Add an element in [applicationsets/platform-helm-addons-appset.yaml](applicationsets/platform-helm-addons-appset.yaml). | The matrix generator installs that chart once per cluster. |
-| Add tenant policy | Add a Kyverno policy and include it from a Kustomize overlay under [addons/kyverno-policies/](addons/kyverno-policies/). | Kyverno matches tenant namespace labels and generates or mutates resources. |
-| Add a workload example | Add manifests under [examples/](examples/) and an ApplicationSet under [applicationsets/](applicationsets/). | The workload can deploy across the same cluster inventory. |
+## Product onboarding in one file
+
+```yaml
+# products/checkout/product.yaml
+apiVersion: platform.platformengr.io/v1alpha1
+kind: Product
+product:
+  name: checkout
+  owner: team-checkout
+  costCenter: cc-4711
+  repository: https://github.com/platformengr/fleet-gitops.git
+  path: product-deployments/checkout
+  environments:
+    - environment: dev
+      size: small
+    - environment: prod
+      size: medium
+```
+
+Merging it produces the `checkout` AppProject, a namespace baseline (quota, limits, network policies, RBAC, Pod Security and ownership/cost labels) on every dev and prod cluster, and the Applications `checkout-dev` and `checkout-prod`. See [products/README.md](products/README.md) and [docs/product-onboarding.md](docs/product-onboarding.md).
+
+## What every pull request gets
+
+| Check | What it catches |
+| --- | --- |
+| `validate` ([scripts/validate.sh](scripts/validate.sh)) | YAML syntax, product schema, unknown environments, missing config folders, missing CODEOWNERS, duplicate Application names, Kubernetes schemas, Helm/Kustomize rendering, Kyverno policy violations, Terraform fmt/validate, shellcheck |
+| `plan` | A comment listing the Argo CD Applications the change adds, removes or re-targets |
+| `production-gate` | Waits for an approval on the `production` environment when the change reaches prod |
+| `deployment-record` (after merge) | A GitHub deployment per product environment, linked to the PR and issue: the changelog |
+
+Then `scripts/trace.sh <commit>` shows when Argo CD has reconciled that commit on every cluster. The whole flow is in [docs/operating-model.md](docs/operating-model.md).
+
+## What is simplified, and what production looks like
+
+| Workshop | Production |
+| --- | --- |
+| One repo with three owner folders | Separate infrastructure, platform and product repos |
+| Terraform state on your laptop, applied by hand | Remote state, `plan` on the PR, `apply` from CI after approval |
+| Argo CD reaches kind spokes with the admin certificate | A scoped identity per spoke: workload identity on AKS/EKS/GKE ([infrastructure/cloud/](infrastructure/cloud/)) |
+| `team-checkout` is a name; on kind you impersonate it | A group from your identity provider (OIDC/SSO) |
+| Deployment records say "merged" | Argo CD Notifications sets the status when the sync finishes |
+| Argo CD admin password | SSO and RBAC (course module 10) |
+
+The full list is in [docs/fleet-architecture.md](docs/fleet-architecture.md#production-checklist).
 
 ## About
 
-Maintained by [PlatformEngr](https://www.platformengr.com/), which helps growing teams build and run their internal platforms, with [Daniel Abrahamberg](https://www.abrahamberg.com/) ([LinkedIn](https://www.linkedin.com/in/abrahamberg/)). Issues and PRs are welcome.
+Maintained by [PlatformEngr](https://www.platformengr.com/), which helps growing teams build and run internal platforms, with [Daniel Abrahamberg](https://www.abrahamberg.com/) ([LinkedIn](https://www.linkedin.com/in/abrahamberg/)). Issues and pull requests are welcome.

@@ -1,0 +1,55 @@
+# The namespace baseline (charts/product-namespace) belongs to the platform.
+# Product teams have `edit` in their namespace, which would let them delete the
+# default-deny NetworkPolicy. This policy stops anyone except the platform's
+# identities from changing or deleting objects labelled
+# fleet.gitops/managed-by: platform. The fix for "we need more quota" is a pull
+# request that changes `size` in products/<name>/product.yaml.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: protect-platform-baseline
+  annotations:
+    policies.kyverno.io/title: Protect the platform namespace baseline
+    policies.kyverno.io/category: Multi-tenancy
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: only-platform-may-change-baseline
+      match:
+        any:
+          - resources:
+              kinds:
+                - Namespace
+                - ResourceQuota
+                - LimitRange
+                - NetworkPolicy
+                - RoleBinding
+              operations: ["UPDATE", "DELETE"]
+              selector:
+                matchLabels:
+                  fleet.gitops/managed-by: platform
+      exclude:
+        any:
+          # Cluster admins: on kind this includes Argo CD itself (workshop
+          # simplification, see infrastructure/kind/main.tf) and you.
+          - subjects:
+              - kind: Group
+                name: system:masters
+          # Controllers and the argocd-manager ServiceAccount the cloud scripts create.
+          - subjects:
+              - kind: Group
+                name: system:serviceaccounts:kube-system
+          - subjects:
+              - kind: ServiceAccount
+                name: kyverno-admission-controller
+                namespace: kyverno
+              - kind: ServiceAccount
+                name: kyverno-background-controller
+                namespace: kyverno
+      validate:
+        message: >-
+          {{request.object.kind || request.oldObject.kind}} {{request.object.metadata.name || request.oldObject.metadata.name}}
+          is part of the platform baseline (fleet.gitops/managed-by: platform).
+          Change it through a pull request to products/, not with kubectl.
+        deny: {}

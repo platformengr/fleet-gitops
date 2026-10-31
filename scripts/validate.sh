@@ -1,59 +1,118 @@
 #!/usr/bin/env bash
-# Validate everything Argo CD will read, before Argo CD reads it.
-# Runs locally and in CI (.github/workflows/validate.yaml).
+# Validate everything Argo CD and Terraform will read, before they read it.
+# Runs locally and in CI (.github/workflows/validate.yaml). Every pull request
+# must pass it; branch protection makes that a merge requirement.
 #
-# Requires: kustomize, helm, kubeconform. Optional: shellcheck.
+#   scripts/validate.sh            run every check whose tool is installed
+#   REQUIRE_ALL=1 scripts/validate.sh   fail if an optional tool is missing (CI)
+#
+# Required: python3 (+ pyyaml, jsonschema), helm, kustomize, kubeconform.
+# Optional locally: yamllint, kyverno, terraform, shellcheck.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 CRD_SCHEMAS='https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 KUBECONFORM=(kubeconform -strict -summary -schema-location default -schema-location "$CRD_SCHEMAS")
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
 failed=0
 
 section() { printf '\n\033[1;36m== %s\033[0m\n' "$*"; }
 fail() { printf '\033[1;31mFAIL\033[0m %s\n' "$*"; failed=1; }
+have() {
+  command -v "$1" >/dev/null 2>&1 && return 0
+  if [[ "${REQUIRE_ALL:-0}" == "1" ]]; then fail "$1 is not installed"; else printf '\033[33mSKIP\033[0m %s not installed\n' "$1"; fi
+  return 1
+}
+for tool in python3 helm kustomize kubeconform; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "error: $tool is required" >&2; exit 2; }
+done
 
-section "Argo CD manifests (root app + applicationsets)"
+section "1. YAML syntax and style"
+if have yamllint; then
+  yamllint -s . || fail "yamllint"
+fi
+
+section "2. Fleet rules: inventory, products, ownership, generated Applications"
+python3 scripts/fleet_check.py --quiet || fail "fleet_check.py (run it without --quiet for the full report)"
+
+section "3. Argo CD manifests (root app, ApplicationSets, AppProject)"
 "${KUBECONFORM[@]}" root-app.yaml applicationsets/ || fail "applicationsets"
 
-section "Kustomize overlays"
+section "4. Platform add-on overlays"
 for overlay in addons/*/overlays/*/; do
   echo "-> ${overlay}"
-  # Kyverno ClusterPolicies are CRDs; -ignore-missing-schemas keeps this offline-friendly.
   kustomize build "$overlay" | "${KUBECONFORM[@]}" -ignore-missing-schemas || fail "$overlay"
 done
 
-section "Tenant namespace chart against every request"
-helm lint charts/tenant-namespace >/dev/null || fail "helm lint tenant-namespace"
-for request in requests/namespaces/*.yaml; do
-  for env in dev prod; do
-    echo "-> ${request} (${env})"
-    # The request file wraps values under `namespace:`, matching the chart's values shape.
-    helm template t charts/tenant-namespace -f "$request" --set "cluster.environment=${env}" \
-      | "${KUBECONFORM[@]}" || fail "${request} ${env}"
-  done
+section "5. Product baselines and deployments, per product and environment"
+helm lint charts/product-namespace charts/product-project >/dev/null || fail "helm lint"
+for product in products/*/product.yaml; do
+  name="$(basename "$(dirname "$product")")"
+  helm template "$name" charts/product-project -f "$product" | "${KUBECONFORM[@]}" >/dev/null \
+    || fail "${name}: charts/product-project"
+  # environment<TAB>size<TAB>path for each environment entry
+  python3 - "$product" <<'PY' > "$WORK/envs"
+import sys, yaml
+p = yaml.safe_load(open(sys.argv[1]))["product"]
+for e in p["environments"]:
+    print(e["environment"], e.get("size", "small"), p["path"], sep="\t")
+PY
+  while IFS=$'\t' read -r env size path; do
+    echo "-> ${name} (${env}, ${size})"
+    helm template "$name" charts/product-namespace -f "$product" --set "environment=${env}" --set "size=${size}" \
+      > "$WORK/${name}-${env}-baseline.yaml" || { fail "${name} ${env}: baseline chart"; continue; }
+    "${KUBECONFORM[@]}" "$WORK/${name}-${env}-baseline.yaml" >/dev/null || fail "${name} ${env}: baseline schema"
+    if [[ -d "${path}/${env}" ]]; then
+      kustomize build "${path}/${env}" > "$WORK/${name}-${env}-app.yaml" || { fail "${path}/${env}: kustomize build"; continue; }
+      "${KUBECONFORM[@]}" -ignore-missing-schemas "$WORK/${name}-${env}-app.yaml" >/dev/null || fail "${path}/${env}: schema"
+      # Everything must land in the product's namespace (the AppProject enforces it too).
+      if grep -E '^  namespace: ' "$WORK/${name}-${env}-app.yaml" | grep -vqE "^  namespace: ${name}\$"; then
+        fail "${path}/${env}: resources outside namespace ${name}"
+      fi
+    fi
+  done < "$WORK/envs"
 done
 
-section "Cluster inventory"
-for cluster in clusters/*.yaml; do
-  for field in name server environment upgradeWave region; do
-    grep -qE "^${field}:" "$cluster" || fail "${cluster}: missing ${field}"
-  done
-  env="$(sed -n 's/^environment: *//p' "$cluster")"
-  for addon in namespaces kyverno-policies; do
-    [[ -d "addons/${addon}/overlays/${env}" ]] || fail "${cluster}: no addons/${addon}/overlays/${env}"
-  done
-done
+section "6. Policies: prod Kyverno rules against every product's manifests"
+if have kyverno; then
+  kustomize build addons/kyverno-policies/overlays/prod > "$WORK/policies.yaml"
+  {
+    echo "apiVersion: cli.kyverno.io/v1alpha1"
+    echo "kind: Value"
+    echo "metadata: { name: product-namespaces }"
+    echo "namespaceSelector:"
+    for product in products/*/product.yaml; do
+      printf '  - name: %s\n    labels: { fleet.gitops/type: product }\n' "$(basename "$(dirname "$product")")"
+    done
+  } > "$WORK/values.yaml"
+  shopt -s nullglob
+  apps=("$WORK"/*-app.yaml)
+  shopt -u nullglob
+  if ((${#apps[@]})); then
+    for app in "${apps[@]}"; do
+      echo "-> $(basename "$app" -app.yaml)"
+      if ! kyverno apply "$WORK/policies.yaml" --resource "$app" --values-file "$WORK/values.yaml" >/dev/null 2>&1; then
+        kyverno apply "$WORK/policies.yaml" --resource "$app" --values-file "$WORK/values.yaml" --table 2>&1 | grep -E 'Fail|POLICY' || true
+        fail "$(basename "$app" .yaml): Kyverno policy violation (see the Fail rows above)"
+      fi
+    done
+  fi
+fi
 
-section "Examples"
-for example in examples/*/; do
-  echo "-> ${example}"
-  kustomize build "$example" | "${KUBECONFORM[@]}" -ignore-missing-schemas || fail "$example"
-done
+section "7. Terraform"
+if have terraform; then
+  terraform fmt -check -recursive infrastructure || fail "terraform fmt (run: terraform fmt -recursive infrastructure)"
+  for root in infrastructure/*/; do
+    [[ -f "${root}versions.tf" && "$root" != infrastructure/modules/ ]] || continue
+    echo "-> ${root}"
+    (cd "$root" && terraform init -backend=false -input=false >/dev/null && terraform validate -no-color) || fail "terraform validate ${root}"
+  done
+fi
 
-if command -v shellcheck >/dev/null 2>&1; then
-  section "Shell scripts"
+section "8. Shell scripts"
+if have shellcheck; then
   mapfile -t scripts < <(git ls-files '*.sh')
   ((${#scripts[@]})) && { shellcheck -x "${scripts[@]}" || fail "shellcheck"; }
 fi

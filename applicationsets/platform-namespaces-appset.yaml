@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-namespaces
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/platformengr/fleet-gitops.git
+        revision: main
+        files:
+          - path: clusters/*.yaml
+  template:
+    metadata:
+      name: '{{name}}-platform-namespaces'
+    spec:
+      project: fleet-platform
+      source:
+        repoURL: https://github.com/platformengr/fleet-gitops.git
+        targetRevision: main
+        path: addons/namespaces/overlays/{{environment}}
+      destination:
+        server: '{{server}}'
+        namespace: default
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

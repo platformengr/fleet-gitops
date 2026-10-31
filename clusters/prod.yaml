@@ -1,5 +1,10 @@
+# Fleet inventory: one file per workload cluster. Owned by the platform team.
+# Read by Terraform (infrastructure/kind creates every provider: kind entry and
+# registers it with Argo CD, labelled from these fields) and by the platform
+# ApplicationSets (add-ons, policies, agents per cluster).
 name: prod
-server: https://172.18.0.4:6443
+provider: kind
+server: https://prod-control-plane:6443
 environment: prod
 upgradeWave: "1"
 region: local

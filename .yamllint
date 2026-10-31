@@ -1,0 +1,14 @@
+# yamllint config for scripts/validate.sh. Strict on syntax and duplicates,
+# relaxed on style that Helm templates and long URLs make impractical.
+extends: default
+ignore: |
+  charts/*/templates/
+  infrastructure/kind/.terraform/
+rules:
+  document-start: disable
+  line-length: disable
+  comments: { min-spaces-from-content: 1 }
+  comments-indentation: disable
+  truthy: { check-keys: false }
+  braces: { max-spaces-inside: 1 }
+  indentation: { spaces: 2, indent-sequences: whatever }

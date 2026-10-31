@@ -1,0 +1,5 @@
+# The product block from products/<name>/product.yaml.
+product:
+  name: example
+  owner: example-team
+  repository: https://github.com/example/example-deployment.git

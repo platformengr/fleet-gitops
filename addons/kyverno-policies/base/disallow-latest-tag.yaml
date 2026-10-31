@@ -1,0 +1,27 @@
+# Images must be pinned. ":latest" makes "what is running?" unanswerable from
+# Git, and breaks rollback by revert.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow latest tag
+    policies.kyverno.io/category: Best practices
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-pinned-image-tag
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaceSelector:
+                matchLabels:
+                  fleet.gitops/type: product
+      validate:
+        message: Pin image tags in product namespaces (no ':latest', no missing tag).
+        pattern:
+          spec:
+            containers:
+              - image: "*:* & !*:latest"

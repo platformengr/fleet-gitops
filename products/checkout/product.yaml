@@ -1,0 +1,31 @@
+# Product declaration: the contract between a product team and the platform.
+#
+# The product team proposes this file in a pull request (usually from an
+# "Onboard a product" issue). After platform review and merge, Argo CD turns it
+# into, for each environment below and each cluster whose
+# fleet.gitops/environment label matches:
+#   - an AppProject "checkout" on the hub      (applicationsets/product-projects.yaml)
+#   - the namespace baseline on the cluster    (applicationsets/product-namespaces.yaml)
+#   - the application, e.g. checkout-dev       (applicationsets/product-apps.yaml)
+#
+# Schema: products/schema.json. CI (scripts/fleet_check.py) validates it and
+# prints the Applications it will generate on the pull request.
+apiVersion: platform.platformengr.io/v1alpha1
+kind: Product
+product:
+  name: checkout
+  description: Web shop checkout service
+  owner: team-checkout
+  costCenter: cc-4711
+  request: https://github.com/platformengr/fleet-gitops/issues/1
+  # Where the product team keeps its deployment config. In a real organisation
+  # this is the team's own repo (e.g. checkout-deployment); in this workshop it
+  # is a folder in the fleet repo, owned by the team through CODEOWNERS.
+  repository: https://github.com/platformengr/fleet-gitops.git
+  path: product-deployments/checkout
+  podSecurity: restricted
+  environments:
+    - environment: dev
+      size: small
+    - environment: prod
+      size: medium

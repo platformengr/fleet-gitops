@@ -1,0 +1,53 @@
+# Rendered once per product, environment and matching cluster by
+# applicationsets/product-namespaces.yaml. `product` is the product block from
+# products/<name>/product.yaml; environment and size come from its
+# environments list.
+product:
+  name: example
+  owner: example-team
+  costCenter: cc-0000
+  podSecurity: restricted
+environment: dev
+size: small
+
+# Namespace the ingress controller runs in (platform-helm-addons).
+ingressNamespace: ingress-system
+
+# Size profiles: quota and container defaults. Product teams pick one; the
+# platform team owns what each means.
+sizes:
+  small:
+    quota:
+      requests.cpu: "1"
+      requests.memory: 2Gi
+      limits.cpu: "2"
+      limits.memory: 4Gi
+      pods: "20"
+    defaultRequest: { cpu: 50m, memory: 64Mi }
+    default: { cpu: 250m, memory: 256Mi }
+  medium:
+    quota:
+      requests.cpu: "2"
+      requests.memory: 4Gi
+      limits.cpu: "4"
+      limits.memory: 8Gi
+      pods: "40"
+    defaultRequest: { cpu: 100m, memory: 128Mi }
+    default: { cpu: 500m, memory: 512Mi }
+  large:
+    quota:
+      requests.cpu: "4"
+      requests.memory: 8Gi
+      limits.cpu: "8"
+      limits.memory: 16Gi
+      pods: "80"
+    defaultRequest: { cpu: 100m, memory: 128Mi }
+    default: { cpu: "1", memory: 1Gi }
+
+# Optional External Secrets SecretStore per namespace. Off by default: it needs
+# a secret backend (course module 10 wires one up).
+secretStore:
+  enabled: false
+  # provider block passed through verbatim, e.g. Azure Key Vault, AWS Secrets
+  # Manager or GCP Secret Manager with workload identity.
+  provider: {}

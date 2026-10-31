@@ -1,45 +1,28 @@
-# Cluster Inventory
+# Cluster inventory
 
-This folder is the fleet inventory. Each YAML file describes one target Kubernetes cluster that Argo CD can deploy to.
+One YAML file per workload cluster. The platform team owns this folder, and it is the single source of truth for which clusters exist:
 
-ApplicationSets read these files with the Git file generator. That makes Git, not Argo CD cluster secrets, the readable source of truth for which clusters are in the fleet and what metadata they carry.
+- **Terraform** ([infrastructure/kind](../infrastructure/kind/)) creates every `provider: kind` cluster and registers it with Argo CD. The registration (an Argo CD cluster Secret) gets labels from these fields.
+- **Platform ApplicationSets** read these files directly to install add-ons, policies and log agents per cluster.
+- **Product ApplicationSets** select clusters by the labels, so `environment: prod` here decides where every product's prod environment runs.
 
-## Files
-
-| File | Environment | Purpose |
-| --- | --- | --- |
-| [dev.yaml](dev.yaml) | `dev` | Local development workload cluster. |
-| [prod.yaml](prod.yaml) | `prod` | Local production-like workload cluster. |
-
-## Field Reference
+## Fields
 
 | Field | Used by | Meaning |
 | --- | --- | --- |
-| `name` | Application names, labels, Alloy log labels | Stable cluster name such as `dev` or `prod`. |
-| `server` | Argo CD `destination.server` | Kubernetes API server URL. This must match an Argo CD registered cluster. |
-| `environment` | Overlay paths, labels, tenant namespace filtering | Environment name used by Kustomize overlays and namespace requests. |
-| `upgradeWave` | ApplicationSet selectors | Simple rollout grouping for wave-based deployment examples. |
-| `region` | Application labels | Region metadata for filtering and visibility. |
-| `lokiEndpoint` | Grafana Alloy values | Loki push endpoint used by workload-cluster log agents. |
+| `name` | Terraform, Application names, logs | Stable cluster name, equal to the file name |
+| `provider` | Terraform | `kind` (created by infrastructure/kind), or `aks`/`eks`/`gke`/`external` (created elsewhere) |
+| `server` | Argo CD destination | API server URL as the hub reaches it. kind: `https://<name>-control-plane:6443` |
+| `environment` | Overlays, label `fleet.gitops/environment` | Which product environments land here; must have `addons/*/overlays/<environment>` |
+| `upgradeWave` | Label `fleet.gitops/upgrade-wave` | Order for platform upgrades: wave 0 first |
+| `region` | Label `fleet.gitops/region` | For selection and visibility |
+| `lokiEndpoint` | Alloy log agent | Where the cluster ships logs |
 
-## How The Inventory Is Used
+`scripts/fleet_check.py` (CI) checks required fields, unique names and servers, and that overlays exist for the environment.
 
-| Consumer | File | Result |
-| --- | --- | --- |
-| Platform namespaces | [../applicationsets/platform-addons-appset.yaml](../applicationsets/platform-addons-appset.yaml) | Points each cluster at `addons/namespaces/overlays/{{environment}}`. |
-| Helm add-ons | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) | Installs each listed Helm chart once per cluster. |
-| Kyverno policies | [../applicationsets/kyverno-policies-appset.yaml](../applicationsets/kyverno-policies-appset.yaml) | Applies the policy overlay matching `environment`. |
-| Tenant namespaces | [../applicationsets/tenant-namespaces-appset.yaml](../applicationsets/tenant-namespaces-appset.yaml) | Combines every cluster with every namespace request. |
-| Observability agents | [../applicationsets/observability-agents-appset.yaml](../applicationsets/observability-agents-appset.yaml) | Configures Alloy with cluster labels and `lokiEndpoint`. |
-| Workload examples | [../applicationsets/guestbook-appset.yaml](../applicationsets/guestbook-appset.yaml) | Deploys examples to each cluster. |
+## Add a cluster
 
-## Add A Cluster
-
-1. Copy [dev.yaml](dev.yaml) or [prod.yaml](prod.yaml) to a new file.
-2. Set a unique `name`.
-3. Set `server` to the Kubernetes API server URL Argo CD will use.
-4. Set `environment` to an overlay that exists in [../addons/namespaces/overlays/](../addons/namespaces/overlays/) and [../addons/kyverno-policies/overlays/](../addons/kyverno-policies/overlays/).
-5. Register the cluster in Argo CD with the same server URL.
-6. Commit and push the inventory file.
-
-The server URL matters: if the cluster file says one URL and Argo CD registered another, generated Applications will target an unknown cluster.
+1. Open an **Add or change a cluster** issue.
+2. Copy `dev.yaml` to `<name>.yaml`; set `name`, `server`, `environment`, `upgradeWave`, `region`.
+3. Open a pull request. The `plan` comment lists every Application the new cluster will receive, including every product that has its environment.
+4. After merge, `terraform apply` in `infrastructure/kind` creates and registers it.

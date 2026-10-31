@@ -1,12 +1,12 @@
 # Platform Namespaces
 
-This add-on creates namespaces used by platform components. It is separate from tenant namespace requests.
+This add-on creates namespaces used by platform components. It is separate from product namespaces.
 
-Use this directory for namespaces such as `observability`, `ingress-system`, `cert-manager`, and `kyverno`. Use [../../requests/namespaces/README.md](../../requests/namespaces/README.md) for user or product namespaces.
+Use this directory for namespaces such as `observability`, `ingress-system`, `cert-manager`, and `kyverno`. Product namespaces come from [../../products/](../../products/) and the [product-namespace chart](../../charts/product-namespace/).
 
 ## How It Works Here
 
-[../../applicationsets/platform-addons-appset.yaml](../../applicationsets/platform-addons-appset.yaml) reads each file in [../../clusters/](../../clusters/) and points Argo CD at `addons/namespaces/overlays/{{environment}}`.
+[../../applicationsets/platform-namespaces-appset.yaml](../../applicationsets/platform-namespaces-appset.yaml) reads each file in [../../clusters/](../../clusters/) and points Argo CD at `addons/namespaces/overlays/{{environment}}`.
 
 Kustomize then builds the right overlay for each cluster:
 
@@ -19,14 +19,14 @@ Kustomize then builds the right overlay for each cluster:
 
 Kustomize is helpful here because most namespace YAML is identical, while labels can still differ by environment.
 
-## Platform Vs Tenant Namespaces
+## Platform vs product namespaces
 
 | Namespace type | Owner | Managed by | Example |
 | --- | --- | --- | --- |
 | Platform namespace | Platform team | This add-on | `observability`, `kyverno`, `cert-manager` |
-| Tenant namespace | Product or application team | Namespace request catalog and Helm chart | `product-a` |
+| Product namespace | Product team (requested), platform (baseline) | `products/*/product.yaml` and the product-namespace chart | `checkout` |
 
-Keep the two models separate. Platform namespaces are infrastructure. Tenant namespaces are user-facing requests and have deletion risks for workloads inside them.
+Keep the two models separate. Platform namespaces are infrastructure. Product namespaces are self-service requests with a platform-owned baseline.
 
 ## What To Change
 

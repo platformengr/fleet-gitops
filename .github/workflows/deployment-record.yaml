@@ -1,0 +1,75 @@
+# After a merge to main: record which Applications the commit changes, as a
+# GitHub deployment per product environment and a summary on the run.
+# Together with the pull request and its approval this is the changelog:
+# what changed, who changed and approved it, and when.
+#
+# "Merged" is not "running": Argo CD reconciles within about three minutes.
+# Check it with scripts/trace.sh <commit>. In production you would let Argo CD
+# Notifications set the deployment status when the sync finishes.
+name: deployment-record
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  deployments: write
+  pull-requests: read
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: pip install --quiet pyyaml jsonschema
+      - name: Affected Applications
+        run: |
+          before="${{ github.event.before }}"
+          if [ "$before" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$before" 2>/dev/null; then before="HEAD~1"; fi
+          git diff --name-only "$before" HEAD | python3 scripts/fleet_check.py --affected > affected.json
+      - name: Record deployments
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const apps = JSON.parse(fs.readFileSync('affected.json', 'utf8'));
+            const { owner, repo } = context.repo;
+            const sha = context.sha;
+            const prs = (await github.rest.repos.listPullRequestsAssociatedWithCommit({ owner, repo, commit_sha: sha })).data;
+            const pr = prs.find(p => p.merged_at) || prs[0];
+            const issues = pr ? [...(pr.body || '').matchAll(/(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/gi)].map(m => '#' + m[1]) : [];
+            // One deployment per product environment, e.g. checkout-prod.
+            const envs = {};
+            for (const a of apps.filter(a => a.product)) {
+              const env = `${a.product}-${a.cluster}`;
+              (envs[env] = envs[env] || []).push(a.name);
+            }
+            for (const [environment, names] of Object.entries(envs)) {
+              const d = await github.rest.repos.createDeployment({
+                owner, repo, ref: sha, environment, auto_merge: false, required_contexts: [],
+                description: `${names.join(', ')}${pr ? ` via #${pr.number}` : ''}`.slice(0, 140),
+                payload: { applications: names, pullRequest: pr ? pr.number : null, issues },
+              });
+              await github.rest.repos.createDeploymentStatus({
+                owner, repo, deployment_id: d.data.id, state: 'queued',
+                description: 'Merged. Argo CD reconciles it; check with scripts/trace.sh',
+              });
+            }
+            const lines = [
+              `### Change record for ${sha.slice(0, 7)}`,
+              '',
+              `- **What:** ${context.payload.head_commit ? context.payload.head_commit.message.split('\n')[0] : sha}`,
+              `- **Who:** ${context.actor}${pr && pr.merged_by ? `, merged by ${pr.merged_by.login}` : ''}`,
+              `- **When:** ${new Date().toISOString()}`,
+              `- **Pull request:** ${pr ? `#${pr.number} ${pr.title}` : 'none (direct push)'}`,
+              `- **Issues:** ${issues.join(', ') || 'none linked'}`,
+              '',
+              apps.length ? '| Application | Cluster | Because of |\n| --- | --- | --- |' : 'No Argo CD Application inputs changed.',
+              ...apps.map(a => `| \`${a.name}\` | ${a.cluster} | ${a.because.map(f => '`' + f + '`').join(', ')} |`),
+              '',
+              `Verify: \`scripts/trace.sh ${sha.slice(0, 7)}\``,
+            ];
+            await core.summary.addRaw(lines.join('\n')).write();

@@ -1,0 +1,67 @@
+# The product's own application, per environment and cluster: checkout-dev,
+# checkout-prod. Reads <repository>/<path>/<environment> from product.yaml and
+# runs in the product's AppProject, so it can only deploy into its namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: product-apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    # products x their environments x clusters labelled with that environment.
+    # Inner matrix: one parameter set per (product, environment) entry.
+    # Outer matrix: the cluster generator selects registered clusters whose
+    # fleet.gitops/environment label (set by Terraform from clusters/*.yaml)
+    # equals the entry's environment.
+    - matrix:
+        generators:
+          - matrix:
+              generators:
+                - git:
+                    repoURL: https://github.com/platformengr/fleet-gitops.git
+                    revision: main
+                    files:
+                      - path: products/*/product.yaml
+                - list:
+                    elementsYaml: "{{ .product.environments | toJson }}"
+          - clusters:
+              selector:
+                matchLabels:
+                  fleet.gitops/environment: "{{ .environment }}"
+  template:
+    metadata:
+      name: '{{ .product.name }}-{{ .name }}'
+      labels:
+        fleet.gitops/product: '{{ .product.name }}'
+        fleet.gitops/owner: '{{ .product.owner }}'
+        fleet.gitops/environment: '{{ .environment }}'
+        fleet.gitops/cluster: '{{ .name }}'
+        fleet.gitops/layer: product-app
+      annotations:
+        # Shown as links in the Argo CD UI: from a running app back to the
+        # declaration and the config that produced it.
+        link.argocd.argoproj.io/product.yaml: '{{ trimSuffix ".git" .product.repository }}/blob/main/products/{{ .product.name }}/product.yaml'
+        link.argocd.argoproj.io/config: '{{ trimSuffix ".git" .product.repository }}/tree/main/{{ .product.path }}/{{ .environment }}'
+        link.argocd.argoproj.io/history: '{{ trimSuffix ".git" .product.repository }}/commits/main/{{ .product.path }}/{{ .environment }}'
+    spec:
+      project: '{{ .product.name }}'
+      source:
+        repoURL: '{{ .product.repository }}'
+        targetRevision: main
+        path: '{{ .product.path }}/{{ .environment }}'
+      destination:
+        server: '{{ .server }}'
+        namespace: '{{ .product.name }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        # The namespace comes from the baseline Application. If this app syncs
+        # first it fails and retries: a missing dependency heals itself.
+        retry:
+          limit: 10
+          backoff:
+            duration: 15s
+            factor: 2
+            maxDuration: 5m

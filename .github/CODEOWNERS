@@ -1,7 +1,15 @@
-# Require platform review for changes that can affect clusters, policies, or namespace lifecycle.
-/applicationsets/ @platform-team
-/addons/ @platform-team
-/charts/ @platform-team
-/clusters/ @platform-team
-/requests/namespaces/ @platform-team
-/root-app.yaml @platform-team
+# Who must review what. With branch protection ("Require review from Code
+# Owners") these lines are the ownership model of the platform.
+# scripts/set-repo-url.sh --owner rewrites @platformengr to your user or org.
+
+# Platform team: everything by default, in particular infrastructure, the
+# inventory, ApplicationSets, add-ons, policies and the namespace baseline.
+*                               @platformengr/platform-team
+
+# Product declarations: the product team proposes, the platform team approves.
+/products/checkout/             @platformengr/team-checkout @platformengr/platform-team
+
+# Product deployment config: owned by the product team alone. Production
+# changes additionally wait for the "production" environment approval
+# (.github/workflows/production-gate.yaml).
+/product-deployments/checkout/  @platformengr/team-checkout

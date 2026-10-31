@@ -1,0 +1,36 @@
+name: Add or change a cluster
+description: Add a workload cluster to the fleet, or change one (environment, region, upgrade wave).
+title: "Cluster: <name>"
+labels: ["platform", "cluster"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Clusters are defined by `clusters/<name>.yaml`. Terraform creates and registers
+        them (`infrastructure/`), and every ApplicationSet picks them up from the inventory.
+  - type: input
+    id: name
+    attributes:
+      label: Cluster name
+      placeholder: prod-eu
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Products with this environment will be deployed to the cluster.
+      options: ["dev", "prod"]
+    validations:
+      required: true
+  - type: input
+    id: region
+    attributes:
+      label: Region
+      placeholder: local
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+    validations:
+      required: true

@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-10"
 spec:
-  description: Multi-cluster GitOps reference architecture for platform add-ons, tenant namespaces, and sample workloads.
+  description: Platform-owned Applications - add-ons, policies, observability and the product namespace baselines.
   # Repositories that Applications in this project are allowed to read from.
   # Listing a repo here does not install anything by itself.
   sourceRepos:

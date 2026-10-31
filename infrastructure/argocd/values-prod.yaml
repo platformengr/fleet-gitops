@@ -1,0 +1,112 @@
+# Argo CD Helm values: prod profile (HA hub on AKS / EKS / GKE).
+# Chart: argo/argo-cd, version pinned in bootstrap/lib/argocd.sh (ARGOCD_CHART_VERSION).
+# Based on the chart's documented HA layout. Review every TODO before real use.
+#
+# Node requirements: redis-ha runs 3 Redis + 3 HAProxy pods with hard
+# anti-affinity, so the hub needs at least 3 schedulable worker nodes (the
+# cloud up.sh scripts let the autoscaler add them).
+
+global:
+  # TODO: set to the hostname you expose Argo CD on (ingress / Gateway / internal LB).
+  domain: argocd.example.com
+  # Spread replicas across nodes; zones are handled by topologySpreadConstraints below.
+  affinity:
+    podAntiAffinity: soft
+
+configs:
+  params:
+    # Terminate TLS at argocd-server (or at an ingress that re-encrypts). Never true in prod
+    # unless TLS is terminated in front of it on a trusted network.
+    server.insecure: false
+    # Enables ApplicationSet strategy.type: RollingSync (lesson 08).
+    applicationsetcontroller.enable.progressive.syncs: true
+    # Controller sharding (lesson 11): when one controller replica can't keep up
+    # (roughly beyond a few hundred apps or ~10+ clusters), raise controller.replicas
+    # and pick an algorithm. consistent-hashing rebalances least when clusters come and go.
+    # controller.sharding.algorithm: consistent-hashing
+  cm:
+    application.resourceTrackingMethod: annotation
+    # Local admin is for break-glass only. After SSO is configured (lesson 09):
+    # admin.enabled: "false"
+    # TODO: SSO, e.g. oidc.config for Entra ID / Cognito / Google, or dex.config.
+  rbac:
+    # Read-only by default; grant roles to SSO groups explicitly.
+    policy.default: role:readonly
+    # policy.csv: |
+    #   g, platform-team, role:admin
+
+# Redis HA: 3 replicas with Sentinel + HAProxy. Replaces the single redis.
+redis-ha:
+  enabled: true
+  haproxy:
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+  redis:
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+
+controller:
+  # One replica handles all clusters. For sharding, set replicas: 2+ and the
+  # env/param above; each replica owns a subset of clusters (StatefulSet ordinals).
+  replicas: 1
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { memory: 2Gi }
+  pdb:
+    enabled: true
+    minAvailable: 0   # a single replica must be evictable for node upgrades
+
+server:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  pdb:
+    enabled: true
+    minAvailable: 1
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+    # TODO: expose via ingress/Gateway with a real certificate, ideally on an internal LB.
+    # ingress:
+    #   enabled: true
+    #   ingressClassName: nginx
+    #   tls: true
+
+repoServer:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { memory: 1Gi }
+  pdb:
+    enabled: true
+    minAvailable: 1
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+
+applicationSet:
+  replicas: 2   # leader election: one active, one warm standby
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+# SSO via Dex is optional; many teams point Argo CD straight at their OIDC IdP.
+dex:
+  enabled: false
+
+notifications:
+  enabled: true
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }

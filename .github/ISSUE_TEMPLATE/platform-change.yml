@@ -1,0 +1,22 @@
+name: Platform change
+description: Add-on upgrade, policy change, quota profile, or anything else the platform team owns.
+labels: ["platform"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What should change
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Who and what is affected
+      description: Clusters, environments, products. Will it reach prod?
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: How do we roll it back
+      placeholder: Revert the pull request.

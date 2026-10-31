@@ -1,0 +1,28 @@
+# One AppProject per product, on the hub. Applications in it may only read the
+# product's repository, only deploy into the product's namespace, never create
+# cluster-scoped objects, and never touch what the platform baseline owns.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ required "product.name is required" .Values.product.name }}
+  namespace: argocd
+  labels:
+    fleet.gitops/product: {{ .Values.product.name | quote }}
+    fleet.gitops/owner: {{ .Values.product.owner | quote }}
+spec:
+  description: {{ printf "%s (owner: %s)" .Values.product.name .Values.product.owner | quote }}
+  sourceRepos:
+    - {{ required "product.repository is required" .Values.product.repository | quote }}
+  destinations:
+    - server: "*"
+      namespace: {{ .Values.product.name | quote }}
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
+    - group: rbac.authorization.k8s.io
+      kind: Role

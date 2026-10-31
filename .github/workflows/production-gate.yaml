@@ -1,0 +1,58 @@
+# Production changes need an explicit approval; everything else does not.
+#
+# The "approve" job only runs when a pull request touches something that
+# reaches prod, and it uses the "production" environment. Configure that
+# environment (Settings > Environments > production > Required reviewers) and
+# make "production-gate / approve" a required check in branch protection: the
+# pull request cannot merge until a reviewer approves the deployment. For
+# non-prod changes the job is skipped, which counts as passing.
+#
+# Argo CD syncs prod automatically after merge, so this approval, the review
+# and the merge commit are the audit trail of every production change.
+name: production-gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      production: ${{ steps.diff.outputs.production }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        name: Does this change reach prod?
+        run: |
+          git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" > changed.txt
+          cat changed.txt
+          # Product config for prod, prod policy and namespace overlays, prod
+          # inventory entries, and product declarations (they can add prod).
+          prod_clusters="$(grep -l '^environment: prod' clusters/*.yaml 2>/dev/null || true)"
+          {
+            grep -E '^product-deployments/[^/]+/prod/' changed.txt || true
+            grep -E '^addons/[^/]+/overlays/prod/' changed.txt || true
+            grep -E '^products/[^/]+/product\.yaml$' changed.txt || true
+            for c in $prod_clusters; do grep -Fx "$c" changed.txt || true; done
+          } > prod.txt
+          if [ -s prod.txt ]; then
+            echo "production=true" >> "$GITHUB_OUTPUT"
+            { echo "### This change reaches production"; echo; sed 's/^/- /' prod.txt; } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "production=false" >> "$GITHUB_OUTPUT"
+            echo "No production impact: no approval needed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  approve:
+    needs: detect
+    if: needs.detect.outputs.production == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: |
+          echo "Production change approved for PR #${{ github.event.pull_request.number }} at ${{ github.event.pull_request.head.sha }}"
