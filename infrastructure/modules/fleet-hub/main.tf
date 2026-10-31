@@ -64,13 +64,15 @@ resource "kubernetes_secret_v1" "repository" {
 }
 
 locals {
-  root = yamldecode(var.root_app_manifest)
+  root = var.root_app_manifest == null ? null : yamldecode(var.root_app_manifest)
 }
 
 # The root Application is a CRD instance. kubernetes_manifest would need the
 # CRD at plan time (it does not exist before Argo CD is installed), so the
 # argocd-apps chart creates it instead.
 resource "helm_release" "root_app" {
+  count = local.root == null ? 0 : 1
+
   name       = "fleet-root"
   namespace  = var.argocd_namespace
   repository = "https://argoproj.github.io/argo-helm"

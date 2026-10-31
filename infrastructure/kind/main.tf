@@ -85,6 +85,8 @@ module "fleet_hub" {
     }
   }
 
-  root_app_manifest = file("${local.repo_root}/root-app.yaml")
+  # The course adds root-app.yaml in module 03; until then Terraform only
+  # installs Argo CD and registers the clusters.
+  root_app_manifest = fileexists("${local.repo_root}/root-app.yaml") ? file("${local.repo_root}/root-app.yaml") : null
   repository        = var.repository
 }

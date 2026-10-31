@@ -8,5 +8,5 @@ output "registered_clusters" {
 }
 
 output "root_application" {
-  value = local.root.metadata.name
+  value = local.root == null ? null : local.root.metadata.name
 }

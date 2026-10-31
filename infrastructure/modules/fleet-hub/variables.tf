@@ -40,8 +40,9 @@ variable "spokes" {
 }
 
 variable "root_app_manifest" {
-  description = "Contents of root-app.yaml (an Argo CD Application). Applied last; it hands everything else to Git."
+  description = "Contents of root-app.yaml (an Argo CD Application). Applied last; it hands everything else to Git. null: install and register only."
   type        = string
+  default     = null
 }
 
 variable "repository" {

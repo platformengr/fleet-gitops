@@ -38,17 +38,22 @@ section "2. Fleet rules: inventory, products, ownership, generated Applications"
 python3 scripts/fleet_check.py --quiet || fail "fleet_check.py (run it without --quiet for the full report)"
 
 section "3. Argo CD manifests (root app, ApplicationSets, AppProject)"
-"${KUBECONFORM[@]}" root-app.yaml applicationsets/ || fail "applicationsets"
+argo=()
+[[ -f root-app.yaml ]] && argo+=(root-app.yaml)
+[[ -d applicationsets ]] && argo+=(applicationsets/)
+if ((${#argo[@]})); then "${KUBECONFORM[@]}" "${argo[@]}" || fail "applicationsets"; else echo "none yet"; fi
 
 section "4. Platform add-on overlays"
+shopt -s nullglob
 for overlay in addons/*/overlays/*/; do
   echo "-> ${overlay}"
   kustomize build "$overlay" | "${KUBECONFORM[@]}" -ignore-missing-schemas || fail "$overlay"
 done
 
 section "5. Product baselines and deployments, per product and environment"
-helm lint charts/product-namespace charts/product-project >/dev/null || fail "helm lint"
+for chart in charts/*/; do helm lint "$chart" >/dev/null || fail "helm lint ${chart}"; done
 for product in products/*/product.yaml; do
+  [[ -d charts/product-namespace && -d charts/product-project ]] || { fail "${product}: charts/product-namespace and charts/product-project are needed"; break; }
   name="$(basename "$(dirname "$product")")"
   helm template "$name" charts/product-project -f "$product" | "${KUBECONFORM[@]}" >/dev/null \
     || fail "${name}: charts/product-project"
@@ -76,7 +81,9 @@ PY
 done
 
 section "6. Policies: prod Kyverno rules against every product's manifests"
-if have kyverno; then
+if [[ ! -d addons/kyverno-policies/overlays/prod ]]; then
+  echo "no policies yet"
+elif have kyverno; then
   kustomize build addons/kyverno-policies/overlays/prod > "$WORK/policies.yaml"
   {
     echo "apiVersion: cli.kyverno.io/v1alpha1"
@@ -87,9 +94,7 @@ if have kyverno; then
       printf '  - name: %s\n    labels: { fleet.gitops/type: product }\n' "$(basename "$(dirname "$product")")"
     done
   } > "$WORK/values.yaml"
-  shopt -s nullglob
   apps=("$WORK"/*-app.yaml)
-  shopt -u nullglob
   if ((${#apps[@]})); then
     for app in "${apps[@]}"; do
       echo "-> $(basename "$app" -app.yaml)"
@@ -102,7 +107,9 @@ if have kyverno; then
 fi
 
 section "7. Terraform"
-if have terraform; then
+if [[ ! -d infrastructure ]]; then
+  echo "no infrastructure yet"
+elif have terraform; then
   terraform fmt -check -recursive infrastructure || fail "terraform fmt (run: terraform fmt -recursive infrastructure)"
   for root in infrastructure/*/; do
     [[ -f "${root}versions.tf" && "$root" != infrastructure/modules/ ]] || continue
@@ -113,7 +120,7 @@ fi
 
 section "8. Shell scripts"
 if have shellcheck; then
-  mapfile -t scripts < <(git ls-files '*.sh')
+  mapfile -t scripts < <(git ls-files '*.sh' 2>/dev/null || find . -name '*.sh' -not -path './.git/*')
   ((${#scripts[@]})) && { shellcheck -x "${scripts[@]}" || fail "shellcheck"; }
 fi
 

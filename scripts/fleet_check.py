@@ -72,6 +72,8 @@ CLUSTER_FIELDS = ["name", "provider", "server", "environment", "upgradeWave", "r
 
 def load_inventory() -> dict[str, dict]:
     inv: dict[str, dict] = {}
+    if not (ROOT / "clusters").is_dir():
+        return inv  # the course adds clusters/ in module 01
     servers: dict[str, str] = {}
     for f in sorted((ROOT / "clusters").glob("*.yaml")):
         rel = f.relative_to(ROOT)
@@ -95,12 +97,26 @@ def load_inventory() -> dict[str, dict]:
             err(f"{rel}: kind clusters must use server https://{name}-control-plane:6443")
         env = c.get("environment")
         for addon in ("namespaces", "kyverno-policies"):
-            if env and not (ROOT / "addons" / addon / "overlays" / str(env)).is_dir():
+            if env and (ROOT / "addons" / addon).is_dir() and not (ROOT / "addons" / addon / "overlays" / str(env)).is_dir():
                 err(f"{rel}: environment '{env}' has no addons/{addon}/overlays/{env}")
         inv[name or f.stem] = c
     if not inv:
         err("clusters/: no clusters in the inventory")
     return inv
+
+
+REFERENCE = "github.com/platformengr/fleet-gitops"
+
+
+def check_repo_urls(repo_url: str) -> None:
+    """The #1 workshop snag: a manifest still points at the reference repo, so
+    Argo CD reads someone else's Git and your pushes change nothing."""
+    if not repo_url or norm_url(repo_url) == REFERENCE:
+        return
+    for f in sorted([ROOT / "root-app.yaml", *(ROOT / "applicationsets").glob("*.yaml"),
+                     *(ROOT / "products").glob("*/product.yaml")]):
+        if f.exists() and REFERENCE in f.read_text().lower():
+            err(f"{f.relative_to(ROOT)}: still points at {REFERENCE}; run scripts/set-repo-url.sh")
 
 
 def cluster_labels(c: dict) -> dict[str, str]:
@@ -141,6 +157,8 @@ def owner_rule(path: str, rules) -> tuple[str, list[str]]:
 
 
 def load_products(inv: dict[str, dict], repo_url: str) -> dict[str, dict]:
+    if not (ROOT / "products" / "schema.json").exists():
+        return {}
     schema = json.loads((ROOT / "products" / "schema.json").read_text())
     validator = jsonschema.Draft202012Validator(schema)
     envs_in_fleet = {str(c.get("environment")) for c in inv.values()}
@@ -338,6 +356,8 @@ def apply_selector(params: list[dict], selector):
 
 def simulate(inv: dict) -> list[dict]:
     apps = []
+    if (ROOT / "applicationsets").is_dir() and not (ROOT / "root-app.yaml").exists():
+        err("applicationsets/ exists but root-app.yaml does not: nothing would sync it")
     for f in sorted((ROOT / "applicationsets").glob("*.yaml")):
         rel = str(f.relative_to(ROOT))
         for doc in yaml.safe_load_all(f.read_text()):
@@ -476,8 +496,9 @@ def main() -> int:
     ap.add_argument("--affected", action="store_true", help="read changed file paths on stdin, print affected Applications as JSON")
     args = ap.parse_args()
 
-    root_app = load_yaml(ROOT / "root-app.yaml") or {}
+    root_app = (load_yaml(ROOT / "root-app.yaml") if (ROOT / "root-app.yaml").exists() else None) or {}
     repo_url = root_app.get("spec", {}).get("source", {}).get("repoURL", "")
+    check_repo_urls(repo_url)
     inv = load_inventory()
     products = load_products(inv, repo_url)
     apps = simulate(inv)

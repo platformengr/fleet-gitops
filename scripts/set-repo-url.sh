@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # scripts/set-repo-url.sh: point the fleet at your own repository.
 #
-# Usage: scripts/set-repo-url.sh <git-url> [--codeowners <@user-or-@org/team>]
+# Usage: scripts/set-repo-url.sh [<git-url>] [--codeowners <@user-or-@org/team>]
 #   e.g. scripts/set-repo-url.sh https://github.com/alice/fleet-gitops.git --codeowners @alice
+#   Without <git-url> it uses this checkout's `origin` remote.
 #
 # Argo CD reads Git, so every manifest that names the fleet repo must name
-# YOURS. This rewrites the current repo URL (taken from root-app.yaml), with or
-# without .git, in:
+# YOURS. This rewrites the reference URL and the current repo URL (from
+# root-app.yaml), with or without .git, in:
 #   root-app.yaml, applicationsets/*.yaml, products/*/product.yaml
 # With --codeowners it also replaces every @platformengr/<team> owner in
 # .github/CODEOWNERS (on a personal account there are no teams: use @you).
@@ -25,7 +26,12 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
-[[ -n "$NEW_URL" ]] || { usage; exit 2; }
+if [[ -z "$NEW_URL" ]]; then
+  NEW_URL="$(git remote get-url origin 2>/dev/null || true)"
+  [[ -n "$NEW_URL" ]] || { echo "error: no <git-url> given and no origin remote" >&2; usage; exit 2; }
+  case "$NEW_URL" in git@github.com:*) NEW_URL="https://github.com/${NEW_URL#git@github.com:}" ;; esac
+  [[ "$NEW_URL" == *.git ]] || NEW_URL="${NEW_URL}.git"
+fi
 case "$NEW_URL" in
   https://*|git@*|ssh://*) ;;
   *) echo "error: '$NEW_URL' does not look like a Git URL" >&2; exit 2 ;;
@@ -36,7 +42,9 @@ fi
 
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-OLD_URL="$(awk '/repoURL:/ {print $2; exit}' root-app.yaml | tr -d "\"'")"
+REFERENCE_BASE="https://github.com/platformengr/fleet-gitops"
+OLD_URL="$(awk '/repoURL:/ {print $2; exit}' root-app.yaml 2>/dev/null | tr -d "\"'")"
+OLD_URL="${OLD_URL:-${REFERENCE_BASE}.git}"
 OLD_BASE="${OLD_URL%.git}"
 NEW_BASE="${NEW_URL%.git}"
 
@@ -55,18 +63,18 @@ rewrite() { # rewrite FILE SED_EXPR...
   rm -f "$tmp"
 }
 
-echo "Repo URL: ${OLD_URL} -> ${NEW_URL}"
-if [[ "$OLD_BASE" != "$NEW_BASE" ]]; then
-  # https://host/owner/repo.git -> new .git URL; https://host/owner/repo/... links -> new base
+echo "Repo URL -> ${NEW_URL}"
+# https://host/owner/repo.git -> new .git URL; https://host/owner/repo/... links -> new base.
+# Both the reference URL (files you just copied from it) and the previous URL.
+for base in "$REFERENCE_BASE" "$OLD_BASE"; do
+  [[ "$base" != "$NEW_BASE" ]] || continue
   for f in root-app.yaml applicationsets/*.yaml products/*/product.yaml; do
     [[ -f "$f" ]] || continue
     rewrite "$f" \
-      -e "s#$(ere_escape "$OLD_BASE")\\.git#$(repl_escape "$NEW_BASE").git#g" \
-      -e "s#$(ere_escape "$OLD_BASE")([/'\" ]|\$)#$(repl_escape "$NEW_BASE")\\1#g"
+      -e "s#$(ere_escape "$base")\\.git#$(repl_escape "$NEW_BASE").git#g" \
+      -e "s#$(ere_escape "$base")([/'\" ]|\$)#$(repl_escape "$NEW_BASE")\\1#g"
   done
-else
-  echo "  already pointing at ${NEW_URL}"
-fi
+done
 
 if [[ -n "$CODEOWNER" ]]; then
   echo "CODEOWNERS: @platformengr/* -> ${CODEOWNER}"
