@@ -1,36 +1,36 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "labels": ["dependencies"],
+  "extends": [
+    "config:recommended"
+  ],
+  "labels": [
+    "dependencies"
+  ],
   "argocd": {
-    "fileMatch": ["^applicationsets/.+\\.yaml$", "^root-app\\.yaml$"]
+    "fileMatch": [
+      "^applicationsets/.+\\.yaml$",
+      "^root-app\\.yaml$"
+    ]
   },
   "customManagers": [
     {
       "description": "Helm charts listed as elements in the platform add-ons ApplicationSet",
       "customType": "regex",
-      "fileMatch": ["^applicationsets/platform-helm-addons-appset\\.yaml$"],
+      "fileMatch": [
+        "^applicationsets/platform-helm-addons-appset\\.yaml$"
+      ],
       "matchStrings": [
         "chart: (?<depName>[^\\s]+)\\s+repoURL: (?<registryUrl>[^\\s]+)\\s+targetRevision: (?<currentValue>[^\\s]+)"
       ],
-      "datasourceTemplate": "helm"
-    },
-    {
-      "description": "Tool and chart versions pinned in bootstrap scripts and CI",
-      "customType": "regex",
-      "fileMatch": ["^bootstrap/.+\\.sh$"],
-      "matchStrings": [
-        "ARGOCD_CHART_VERSION=\"?\\$\\{ARGOCD_CHART_VERSION:-(?<currentValue>[^}\"]+)\\}"
-      ],
-      "depNameTemplate": "argo-cd",
-      "registryUrlTemplate": "https://argoproj.github.io/argo-helm",
       "datasourceTemplate": "helm"
     }
   ],
   "packageRules": [
     {
       "description": "Group add-on bumps into one reviewable PR",
-      "matchFileNames": ["applicationsets/**"],
+      "matchFileNames": [
+        "applicationsets/**"
+      ],
       "groupName": "platform add-ons"
     }
   ]

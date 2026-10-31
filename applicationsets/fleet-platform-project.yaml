@@ -10,7 +10,7 @@ spec:
   # Repositories that Applications in this project are allowed to read from.
   # Listing a repo here does not install anything by itself.
   sourceRepos:
-    - https://github.com/abrahamberg/fleet-gitops.git
+    - https://github.com/platformengr/fleet-gitops.git
     - https://argoproj.github.io/argo-helm
     - https://charts.external-secrets.io
     - https://charts.jetstack.io

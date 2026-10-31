@@ -46,19 +46,11 @@ for cluster in clusters/*.yaml; do
   done
 done
 
-section "Course labs"
-"${KUBECONFORM[@]}" -ignore-filename-pattern 'README' course/labs/ || fail "course/labs"
-
 section "Examples"
 for example in examples/*/; do
   echo "-> ${example}"
   kustomize build "$example" | "${KUBECONFORM[@]}" -ignore-missing-schemas || fail "$example"
 done
-
-if command -v node >/dev/null 2>&1; then
-  section "Quickstart page matches bootstrap env files"
-  node scripts/sync-quickstart-env.js --check || fail "site/quickstart.html is stale"
-fi
 
 if command -v shellcheck >/dev/null 2>&1; then
   section "Shell scripts"

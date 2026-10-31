@@ -9,13 +9,13 @@ spec:
     - matrix:
         generators:
           - git:
-              repoURL: https://github.com/abrahamberg/fleet-gitops.git
+              repoURL: https://github.com/platformengr/fleet-gitops.git
               revision: main
               pathParamPrefix: cluster
               files:
                 - path: clusters/*.yaml
           - git:
-              repoURL: https://github.com/abrahamberg/fleet-gitops.git
+              repoURL: https://github.com/platformengr/fleet-gitops.git
               revision: main
               pathParamPrefix: namespaceRequest
               files:
@@ -30,7 +30,7 @@ spec:
     spec:
       project: fleet-platform
       source:
-        repoURL: https://github.com/abrahamberg/fleet-gitops.git
+        repoURL: https://github.com/platformengr/fleet-gitops.git
         targetRevision: main
         path: charts/tenant-namespace
         helm:

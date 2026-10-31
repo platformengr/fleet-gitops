@@ -50,7 +50,7 @@ From the repository root:
 
 ```bash
 export REPO_URL="https://github.com/YOUR_ORG/fleet-gitops.git"
-perl -pi -e "s#https://github.com/abrahamberg/fleet-gitops.git#$REPO_URL#g" root-app.yaml applicationsets/*.yaml
+perl -pi -e "s#https://github.com/platformengr/fleet-gitops.git#$REPO_URL#g" root-app.yaml applicationsets/*.yaml
 git add root-app.yaml applicationsets
 git commit -m "Point Argo CD at my repo"
 git push

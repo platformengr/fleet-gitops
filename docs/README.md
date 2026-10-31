@@ -6,7 +6,7 @@ Use this directory when you want the architecture before reading every manifest.
 
 | Page | Use it for |
 | --- | --- |
-| [../README.md](../README.md) | The fastest overview and local kind bootstrap commands. |
+| [../README.md](../README.md) | What this repo is and how to use it. The guided course lives at https://www.platformengr.com/learn/fleet-gitops/. |
 | [fleet-architecture.md](fleet-architecture.md) | The platform/workload split, sync order, and data flow. |
 | [local-kind-setup.md](local-kind-setup.md) | A more careful local multi-cluster setup. |
 | [../clusters/README.md](../clusters/README.md) | The cluster inventory contract. |

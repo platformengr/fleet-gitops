@@ -6,7 +6,7 @@ metadata:
 spec:
   generators:
     - git:
-        repoURL: https://github.com/abrahamberg/fleet-gitops.git
+        repoURL: https://github.com/platformengr/fleet-gitops.git
         revision: main
         files:
           - path: clusters/*.yaml
@@ -19,7 +19,7 @@ spec:
     spec:
       project: fleet-platform
       source:
-        repoURL: https://github.com/abrahamberg/fleet-gitops.git
+        repoURL: https://github.com/platformengr/fleet-gitops.git
         targetRevision: main
         path: examples/guestbook-rollout
       destination:

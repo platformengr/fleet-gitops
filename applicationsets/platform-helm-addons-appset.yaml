@@ -9,7 +9,7 @@ spec:
     - matrix:
         generators:
           - git:
-              repoURL: https://github.com/abrahamberg/fleet-gitops.git
+              repoURL: https://github.com/platformengr/fleet-gitops.git
               revision: main
               files:
                 - path: clusters/*.yaml
