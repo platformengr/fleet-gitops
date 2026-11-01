@@ -1,5 +1,6 @@
 # Argo CD Helm values: local profile (kind, laptops, workshops).
-# Chart: argo/argo-cd, version pinned in bootstrap/lib/argocd.sh (ARGOCD_CHART_VERSION).
+# Chart: argo/argo-cd, version pinned in infrastructure/modules/fleet-hub/variables.tf (argocd_chart_version)
+#        and infrastructure/cloud/lib/argocd.sh (ARGOCD_CHART_VERSION).
 # Single replicas, small requests, no SSO. Not for production: see values-prod.yaml.
 
 global:

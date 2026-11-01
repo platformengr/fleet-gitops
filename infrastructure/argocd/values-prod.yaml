@@ -1,5 +1,6 @@
 # Argo CD Helm values: prod profile (HA hub on AKS / EKS / GKE).
-# Chart: argo/argo-cd, version pinned in bootstrap/lib/argocd.sh (ARGOCD_CHART_VERSION).
+# Chart: argo/argo-cd, version pinned in infrastructure/modules/fleet-hub/variables.tf (argocd_chart_version)
+#        and infrastructure/cloud/lib/argocd.sh (ARGOCD_CHART_VERSION).
 # Based on the chart's documented HA layout. Review every TODO before real use.
 #
 # Node requirements: redis-ha runs 3 Redis + 3 HAProxy pods with hard
@@ -18,15 +19,15 @@ configs:
     # Terminate TLS at argocd-server (or at an ingress that re-encrypts). Never true in prod
     # unless TLS is terminated in front of it on a trusted network.
     server.insecure: false
-    # Enables ApplicationSet strategy.type: RollingSync (lesson 08).
+    # Enables ApplicationSet strategy.type: RollingSync (course module 07).
     applicationsetcontroller.enable.progressive.syncs: true
-    # Controller sharding (lesson 11): when one controller replica can't keep up
+    # Controller sharding (course module 11): when one controller replica can't keep up
     # (roughly beyond a few hundred apps or ~10+ clusters), raise controller.replicas
     # and pick an algorithm. consistent-hashing rebalances least when clusters come and go.
     # controller.sharding.algorithm: consistent-hashing
   cm:
     application.resourceTrackingMethod: annotation
-    # Local admin is for break-glass only. After SSO is configured (lesson 09):
+    # Local admin is for break-glass only. After SSO is configured (course module 10):
     # admin.enabled: "false"
     # TODO: SSO, e.g. oidc.config for Entra ID / Cognito / Google, or dex.config.
   rbac:
