@@ -8,4 +8,4 @@ server: https://dev-control-plane:6443
 environment: dev
 upgradeWave: "0"
 region: local
-lokiEndpoint: http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push
+lokiEndpoint: http://platform-control-plane:31100/loki/api/v1/push

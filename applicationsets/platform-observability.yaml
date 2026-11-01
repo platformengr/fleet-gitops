@@ -42,6 +42,13 @@ spec:
 
         gateway:
           enabled: true
+          # Spokes push logs here. On kind, every node is on the "kind" Docker
+          # network, so spokes reach http://platform-control-plane:31100
+          # (clusters/*.yaml lokiEndpoint). On a cloud: an internal load
+          # balancer or private ingress instead of a NodePort.
+          service:
+            type: NodePort
+            nodePort: 31100
   destination:
     server: https://kubernetes.default.svc
     namespace: observability

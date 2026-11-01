@@ -55,13 +55,13 @@ That keeps dashboard access centralized instead of creating separate Grafana ins
 
 ## Endpoint Caveat
 
-Each cluster inventory file has a `lokiEndpoint` value. In this reference, it points to the in-cluster Loki gateway service:
+Each cluster inventory file has a `lokiEndpoint` value. A spoke cannot resolve the hub's `*.svc.cluster.local` names, so the Loki gateway on the hub is exposed declaratively (a fixed NodePort in [platform-observability.yaml](../applicationsets/platform-observability.yaml)) and the kind spokes push to the hub node by its Docker network name:
 
 ```yaml
-lokiEndpoint: http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push
+lokiEndpoint: http://platform-control-plane:31100/loki/api/v1/push
 ```
 
-For real multi-cluster networking, that DNS name will not usually work from another cluster. Replace it with an endpoint reachable from workload clusters, such as private ingress, private load balancer, service mesh, VPN, or a managed Loki endpoint.
+On real networks, replace the NodePort with an endpoint reachable from workload clusters, such as an internal load balancer, private ingress, service mesh, VPN, or a managed Loki endpoint, and put its URL in the inventory.
 
 ## Where To Go Next
 
