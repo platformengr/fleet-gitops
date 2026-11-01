@@ -1,0 +1,59 @@
+name: Onboard a product
+description: Ask the platform team for namespaces and Argo CD Applications for a new product.
+title: "Onboard product: <name>"
+labels: ["onboarding"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This request becomes a pull request that adds `products/<name>/product.yaml`
+        (see `products/checkout/` for an example). You can open that PR yourself
+        and reference this issue with `Closes #<this issue>`.
+  - type: input
+    id: name
+    attributes:
+      label: Product name
+      description: Lowercase, digits and dashes. Becomes the namespace and the Application prefix.
+      placeholder: catalog
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Owning team
+      description: The team that gets edit access to the namespaces and owns the config in CODEOWNERS.
+      placeholder: team-catalog
+    validations:
+      required: true
+  - type: input
+    id: cost-center
+    attributes:
+      label: Cost center
+      placeholder: cc-1234
+    validations:
+      required: true
+  - type: checkboxes
+    id: environments
+    attributes:
+      label: Environments
+      options:
+        - label: dev
+        - label: prod
+  - type: dropdown
+    id: size
+    attributes:
+      label: Size (quota and default limits)
+      options: ["small", "medium", "large"]
+    validations:
+      required: true
+  - type: input
+    id: repository
+    attributes:
+      label: Deployment config location
+      description: Repository and folder with one sub-folder per environment.
+      placeholder: this repo, product-deployments/catalog
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything the platform team should know
+      description: Ingress, secrets, data stores, unusual resource needs.

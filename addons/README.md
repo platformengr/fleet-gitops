@@ -2,7 +2,7 @@
 
 This directory contains the platform layer: namespaces, controllers, policy packages, and observability components that support workloads on every cluster.
 
-Read this page when you want to know what the platform installs before tenant workloads arrive.
+Read this page when you want to know what the platform installs before product workloads arrive.
 
 ## How It Works Here
 
@@ -19,15 +19,15 @@ Kustomize is used in the simple way: a `base` contains shared resources, and eac
 
 | Add-on | Purpose | Where it is defined |
 | --- | --- | --- |
-| Platform namespaces | Creates namespaces such as `observability`, `ingress-system`, `cert-manager`, and `kyverno`. | [namespaces/README.md](namespaces/README.md), [../applicationsets/platform-addons-appset.yaml](../applicationsets/platform-addons-appset.yaml) |
+| Platform namespaces | Creates namespaces such as `observability`, `ingress-system`, `cert-manager`, and `kyverno`. | [namespaces/README.md](namespaces/README.md), [../applicationsets/platform-namespaces-appset.yaml](../applicationsets/platform-namespaces-appset.yaml) |
 | cert-manager | Manages certificate lifecycle and CRDs. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
 | ingress-nginx | Provides an ingress controller for HTTP and HTTPS traffic. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
-| Argo Rollouts | Installs the Rollout CRD and controller used by progressive delivery examples. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml), [../examples/guestbook-rollout/README.md](../examples/guestbook-rollout/README.md) |
+| Argo Rollouts | Installs the Rollout CRD and controller for canary releases (course module 07). | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
 | external-secrets | Syncs Kubernetes Secrets from external secret stores. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
 | metrics-server | Provides Kubernetes resource metrics for `kubectl top` and autoscaling inputs. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
 | kube-prometheus-stack | Runs per-cluster Prometheus and Alertmanager. Grafana is disabled here. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
 | Kyverno | Installs the policy engine. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
-| Kyverno tenant policies | Generates tenant namespace guardrails from labels. | [kyverno-policies/README.md](kyverno-policies/README.md), [../applicationsets/kyverno-policies-appset.yaml](../applicationsets/kyverno-policies-appset.yaml) |
+| Kyverno policies | Guardrails between platform and product teams: protected baseline, pinned images, requests and limits. | [kyverno-policies/README.md](kyverno-policies/README.md), [../applicationsets/kyverno-policies-appset.yaml](../applicationsets/kyverno-policies-appset.yaml) |
 | Grafana Alloy | Runs as a per-cluster log collection agent. | [../applicationsets/observability-agents-appset.yaml](../applicationsets/observability-agents-appset.yaml), [../docs/telemetry-collection.md](../docs/telemetry-collection.md) |
 | Loki and Grafana | Run only on the management cluster as the central reference observability stack. | [../applicationsets/platform-observability.yaml](../applicationsets/platform-observability.yaml), [../docs/observability-topology.md](../docs/observability-topology.md) |
 
@@ -45,9 +45,9 @@ That is the core fleet pattern: add or remove a cluster file, and the generated 
 
 | Task | Edit | Watch for |
 | --- | --- | --- |
-| Add a platform namespace | [namespaces/base/platform-namespaces.yaml](namespaces/base/platform-namespaces.yaml) | Namespace names are cluster-scoped and should not conflict with tenant namespace names. |
+| Add a platform namespace | [namespaces/base/platform-namespaces.yaml](namespaces/base/platform-namespaces.yaml) | Namespace names are cluster-scoped and should not conflict with product namespace names. |
 | Add a Helm add-on | The `elements` list in [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) | Pin the chart version, set the namespace, and decide whether CRDs or `ServerSideApply=true` are needed. |
-| Change environment policy | The relevant overlay under [kyverno-policies/overlays/](kyverno-policies/overlays/) | Confirm the generated resources match the tenant namespace labels. |
+| Change environment policy | The relevant overlay under [kyverno-policies/overlays/](kyverno-policies/overlays/) | Confirm the generated resources match the product namespace labels. |
 | Change observability | [../applicationsets/platform-observability.yaml](../applicationsets/platform-observability.yaml) or [../applicationsets/observability-agents-appset.yaml](../applicationsets/observability-agents-appset.yaml) | Workload clusters must be able to reach the Loki endpoint in their cluster inventory file. |
 
 ## Production Notes

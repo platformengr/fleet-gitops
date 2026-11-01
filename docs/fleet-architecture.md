@@ -1,49 +1,102 @@
-# Fleet Architecture
+# Reference architecture
 
-This page explains the whole sample at the level of a platform developer reading the repo for the first time.
+One page that connects every part of the fleet. Each box links to the folder that implements it.
 
-## What Runs Where
+```mermaid
+flowchart TB
+  subgraph GH[GitHub]
+    issue[Issue form] --> pr[Pull request]
+    pr --> ci["validate + plan<br/>(scripts/validate.sh, fleet_check.py)"]
+    pr --> gate["production-gate<br/>(environment approval)"]
+    ci --> merge[Merge to main]
+    gate --> merge
+    merge --> rec["deployment-record<br/>(changelog)"]
+  end
 
-| Place | Role | Main files |
+  subgraph REPO["Git: your fleet repo"]
+    infra["infrastructure/<br/>Terraform"]
+    inv["clusters/*.yaml<br/>inventory"]
+    appsets["root-app.yaml<br/>applicationsets/"]
+    plat["addons/, charts/<br/>add-ons, policies, baseline"]
+    prod["products/*/product.yaml"]
+    pdep["product-deployments/"]
+  end
+  merge --> REPO
+
+  inv --> tf[terraform apply]
+  infra --> tf
+  tf -->|creates| hub
+  tf -->|creates + registers| dev
+  tf -->|creates + registers| prd
+
+  subgraph hub["Hub cluster (platform)"]
+    argo["Argo CD + ApplicationSets"]
+    projects["AppProject per product"]
+    loki["Loki + Grafana"]
+  end
+  REPO -->|pull| argo
+
+  subgraph dev["dev cluster"]
+    dadd["add-ons, Kyverno, Alloy"]
+    dns["namespace checkout<br/>quota, limits, netpol, RBAC"]
+    dapp["checkout-dev"]
+  end
+  subgraph prd["prod cluster"]
+    padd["add-ons, Kyverno, Alloy"]
+    pns["namespace checkout<br/>quota, limits, netpol, RBAC"]
+    papp["checkout-prod"]
+  end
+  argo --> dadd & dns & dapp
+  argo --> padd & pns & papp
+  dadd -. logs .-> loki
+  padd -. logs .-> loki
+```
+
+## Layers
+
+| Layer | Implemented by | Changes when | Who |
+| --- | --- | --- | --- |
+| Infrastructure | [infrastructure/](../infrastructure/) (Terraform) | A cluster is added, removed or upgraded | Platform |
+| Inventory | [clusters/*.yaml](../clusters/) | Same; also drives labels and add-ons | Platform |
+| GitOps controller | Argo CD via [modules/fleet-hub](../infrastructure/modules/fleet-hub/), values in [infrastructure/argocd/](../infrastructure/argocd/) | Argo CD upgrades (Renovate PR) | Platform |
+| Fleet templates | [root-app.yaml](../root-app.yaml), [applicationsets/](../applicationsets/) | A new capability for every cluster or product | Platform |
+| Platform capabilities | [addons/](../addons/), Helm add-ons in [platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) | Add-on versions, policies | Platform |
+| Product contract | [products/*/product.yaml](../products/), [charts/product-namespace](../charts/product-namespace/), [charts/product-project](../charts/product-project/) | Onboarding, new environment, size | Product proposes, platform approves |
+| Product workloads | [product-deployments/](../product-deployments/) | Every release | Product |
+| Operations visibility | [.github/workflows/deployment-record.yaml](../.github/workflows/deployment-record.yaml), [scripts/trace.sh](../scripts/trace.sh), Loki/Grafana | Continuously | Both |
+
+## Generated Applications
+
+`python3 scripts/fleet_check.py` prints the current list. For two clusters and one product:
+
+| ApplicationSet | Generator | Applications |
 | --- | --- | --- |
-| Platform cluster | Runs Argo CD, plus central Grafana and Loki. | [../root-app.yaml](../root-app.yaml), [platform-observability.yaml](../applicationsets/platform-observability.yaml) |
-| Workload clusters | Receive platform add-ons, tenant namespaces, policies, observability agents, and sample workloads. | [../clusters/dev.yaml](../clusters/dev.yaml), [../clusters/prod.yaml](../clusters/prod.yaml) |
-| Git repository | Source of truth for cluster inventory, add-on definitions, request files, and examples. | [../applicationsets/](../applicationsets/), [../addons/](../addons/), [../requests/namespaces/](../requests/namespaces/) |
+| `platform-namespaces` | git files `clusters/*.yaml` | `dev-platform-namespaces`, `prod-platform-namespaces` |
+| `platform-helm-addons` | matrix: clusters × list of charts | `dev-cert-manager`, `prod-kyverno`, ... (7 per cluster) |
+| `kyverno-policies` | git files `clusters/*.yaml` | `dev-kyverno-policies`, `prod-kyverno-policies` |
+| `observability-agents` | git files `clusters/*.yaml` | `dev-observability-agent`, `prod-observability-agent` |
+| (Applications) | none, hub only | `platform-loki`, `platform-grafana` |
+| `product-projects` | git files `products/*/product.yaml` | `product-checkout-project` |
+| `product-namespaces` | matrix(matrix(products, their environments), clusters by label) | `checkout-dev-baseline`, `checkout-prod-baseline` |
+| `product-apps` | same | `checkout-dev`, `checkout-prod` |
 
-## Sync Flow
+Platform ApplicationSets read the inventory files directly; product ApplicationSets select registered clusters by the labels Terraform derived from those same files. Either way, `clusters/*.yaml` is the source of truth.
 
-1. Apply [../root-app.yaml](../root-app.yaml) to the Argo CD namespace on the platform cluster.
-2. The root Application reads every manifest in [../applicationsets/](../applicationsets/).
-3. [fleet-platform-project.yaml](../applicationsets/fleet-platform-project.yaml) creates the AppProject used by the generated Applications.
-4. ApplicationSets read [../clusters/dev.yaml](../clusters/dev.yaml) and [../clusters/prod.yaml](../clusters/prod.yaml).
-5. Generated Applications install platform namespaces, Helm add-ons, Kyverno policies, tenant namespaces, observability agents, and examples.
-6. Platform-only Applications install Loki and Grafana on the management cluster.
+## Production checklist
 
-## Sync Order
+The repository is production-shaped, not production. Work through this with your team:
 
-Argo CD sync waves keep the demo readable. Lower waves apply first.
-
-| Wave | File | Result |
-| --- | --- | --- |
-| `-10` | [fleet-platform-project.yaml](../applicationsets/fleet-platform-project.yaml) | Creates the AppProject boundary. |
-| `0` | [platform-addons-appset.yaml](../applicationsets/platform-addons-appset.yaml) | Creates platform namespaces with Kustomize. |
-| `1` to `6` | [platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) | Installs Helm add-ons such as cert-manager, ingress-nginx, Rollouts, metrics-server, Prometheus stack, and Kyverno. |
-| `7` | [kyverno-policies-appset.yaml](../applicationsets/kyverno-policies-appset.yaml) | Applies policy overlays after Kyverno exists. |
-| `8` | [tenant-namespaces-appset.yaml](../applicationsets/tenant-namespaces-appset.yaml) | Renders tenant namespace requests through the local Helm chart. |
-| `9` | [observability-agents-appset.yaml](../applicationsets/observability-agents-appset.yaml) | Runs Grafana Alloy on workload clusters. |
-| `10` and `11` | [platform-observability.yaml](../applicationsets/platform-observability.yaml) | Installs Loki and Grafana on the platform cluster. |
-
-## Main Design Choice
-
-The repo keeps user-facing inputs small and moves platform behavior behind them.
-
-Example: a team edits [../requests/namespaces/product-a.yaml](../requests/namespaces/product-a.yaml). Argo CD renders [../charts/tenant-namespace/templates/namespace.yaml](../charts/tenant-namespace/templates/namespace.yaml), labels the Namespace, and Kyverno policies generate the default guardrails.
-
-That lets the platform change quotas, policies, labels, or add-ons later without asking app teams to learn every platform manifest.
-
-## Where To Go Next
-
-- Read [../applicationsets/README.md](../applicationsets/README.md) to understand the generators.
-- Read [kustomize-overlays.md](kustomize-overlays.md) to understand the base/overlay layout.
-- Read [tenant-namespace-flow.md](tenant-namespace-flow.md) to follow the most complete end-to-end workflow.
-- Read [observability-topology.md](observability-topology.md) for the Grafana, Loki, Prometheus, and Alloy split.
+| Area | Do |
+| --- | --- |
+| Repositories | Split infrastructure, platform fleet and product deployment repos; one product repo per team |
+| Terraform | Remote state with locking; plan on PR, apply from CI with OIDC; cloud modules instead of scripts |
+| Argo CD | HA profile ([values-prod.yaml](../infrastructure/argocd/values-prod.yaml)), SSO, RBAC per team, admin user disabled, webhooks instead of polling |
+| Spoke access | Workload identity or scoped ServiceAccounts per spoke; no admin certificates |
+| Tenancy | Per-product AppProjects (done), SSO groups for `owner`, Argo CD RBAC so teams only see their projects |
+| Policies | Kyverno in Enforce everywhere that matters; policy exceptions via reviewed PRs |
+| Secrets | External Secrets with a cloud secret store and workload identity (`secretStore` in the baseline chart) |
+| Delivery | Promotion by PR (done); consider ApplicationSet progressive sync or Argo Rollouts canaries for prod |
+| Visibility | Argo CD Notifications updating GitHub deployment status and chat; dashboards per product |
+| Recovery | Rehearse rebuilding the hub from Git; back up persistent volumes (Velero or cloud snapshots) |
+| Upgrades | Kubernetes and add-ons wave by wave (`upgradeWave`), on a schedule; Renovate PRs reviewed weekly |
+| Cost | Quotas per size (done); cost-center labels (done) exported to your cost tool |

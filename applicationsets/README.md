@@ -1,59 +1,37 @@
-# Argo CD ApplicationSets
+# ApplicationSets
 
-This folder is the control layer of the repo. The root Application points Argo CD here, and these manifests generate the Applications that manage the fleet.
+The fleet's templates. [root-app.yaml](../root-app.yaml) syncs this folder; each ApplicationSet here generates Argo CD Applications from the inventory ([clusters/](../clusters/)) and the product declarations ([products/](../products/)). Owned by the platform team.
 
-If you understand this folder, the rest of the repo becomes much easier to read.
+| File | Kind | Generates |
+| --- | --- | --- |
+| [fleet-platform-project.yaml](fleet-platform-project.yaml) | AppProject | `fleet-platform`, the project for platform-owned Applications |
+| [platform-namespaces-appset.yaml](platform-namespaces-appset.yaml) | ApplicationSet | `<cluster>-platform-namespaces`: shared platform namespaces |
+| [platform-helm-addons-appset.yaml](platform-helm-addons-appset.yaml) | ApplicationSet | `<cluster>-<addon>`: cert-manager, ingress-nginx, Argo Rollouts, External Secrets, metrics-server, kube-prometheus-stack, Kyverno |
+| [kyverno-policies-appset.yaml](kyverno-policies-appset.yaml) | ApplicationSet | `<cluster>-kyverno-policies`: guardrails, overlay per environment |
+| [observability-agents-appset.yaml](observability-agents-appset.yaml) | ApplicationSet | `<cluster>-observability-agent`: Alloy shipping logs to Loki |
+| [platform-observability.yaml](platform-observability.yaml) | Applications | `platform-loki`, `platform-grafana` on the hub |
+| [product-projects.yaml](product-projects.yaml) | ApplicationSet | `product-<name>-project`: one AppProject per product |
+| [product-namespaces.yaml](product-namespaces.yaml) | ApplicationSet | `<product>-<cluster>-baseline`: namespace, quota, limits, network policy, RBAC |
+| [product-apps.yaml](product-apps.yaml) | ApplicationSet | `<product>-<cluster>`: the product's workloads |
 
-## Bootstrap Relationship
+## Generator patterns
 
-[../root-app.yaml](../root-app.yaml) is a normal Argo CD Application. It targets this folder:
+| Pattern | Example | Use |
+| --- | --- | --- |
+| Git files | [platform-namespaces-appset.yaml](platform-namespaces-appset.yaml) | One Application per `clusters/*.yaml` |
+| Matrix: git files × list | [platform-helm-addons-appset.yaml](platform-helm-addons-appset.yaml) | Every add-on on every cluster |
+| Nested matrix: (git files × `elementsYaml` list) × clusters | [product-apps.yaml](product-apps.yaml) | Expand each product's `environments`, then pick clusters whose `fleet.gitops/environment` label matches |
 
-```yaml
-source:
-  path: applicationsets
+The product sets use the **cluster generator** with a label selector, so they target the Argo CD cluster Secrets that Terraform labelled from the inventory. A matrix fails when two children produce the same key with different values, which is why product files keep their fields under `product:` (the cluster generator owns `name` and `metadata`).
+
+## Preview before merge
+
+```bash
+python3 scripts/fleet_check.py
 ```
 
-After the root app syncs, Argo CD sees the AppProject, Applications, and ApplicationSets in this directory.
+prints every Application these files generate for the current inventory and products, and fails on duplicates or unknown environments. CI posts the difference against `main` on every pull request.
 
-## Files
+## Sync order
 
-| File | Kind | What it creates |
-| --- | --- | --- |
-| [fleet-platform-project.yaml](fleet-platform-project.yaml) | AppProject | Permission boundary for generated Applications. |
-| [platform-addons-appset.yaml](platform-addons-appset.yaml) | ApplicationSet | Platform namespace Applications, one per cluster. |
-| [platform-helm-addons-appset.yaml](platform-helm-addons-appset.yaml) | ApplicationSet | Helm add-on Applications, one per cluster and add-on. |
-| [kyverno-policies-appset.yaml](kyverno-policies-appset.yaml) | ApplicationSet | Kyverno policy Applications, one per cluster. |
-| [tenant-namespaces-appset.yaml](tenant-namespaces-appset.yaml) | ApplicationSet | Tenant namespace Applications, one per cluster and request file. |
-| [observability-agents-appset.yaml](observability-agents-appset.yaml) | ApplicationSet | Grafana Alloy Applications, one per cluster. |
-| [platform-observability.yaml](platform-observability.yaml) | Application | Platform Loki and Grafana on the management cluster. |
-| [guestbook-appset.yaml](guestbook-appset.yaml) | ApplicationSet | Guestbook example on every cluster. |
-| [wave-demo-appset.yaml](wave-demo-appset.yaml) | ApplicationSet | Guestbook example only on clusters in upgrade wave `0`. |
-
-## Generator Patterns
-
-| Pattern | Example | Why it is used |
-| --- | --- | --- |
-| Git file generator | [platform-addons-appset.yaml](platform-addons-appset.yaml) | Reads every cluster file and creates one Application per cluster. |
-| Matrix generator | [platform-helm-addons-appset.yaml](platform-helm-addons-appset.yaml) | Combines clusters with a list of add-ons. |
-| Matrix generator with two Git sources | [tenant-namespaces-appset.yaml](tenant-namespaces-appset.yaml) | Combines every cluster with every namespace request. |
-| Selector | [wave-demo-appset.yaml](wave-demo-appset.yaml) | Deploys only to inventory files with matching metadata. |
-| Plain Application | [platform-observability.yaml](platform-observability.yaml) | Installs central services only once on the platform cluster. |
-
-## Main Flow
-
-1. Cluster files in [../clusters/](../clusters/) provide `name`, `server`, `environment`, `region`, `upgradeWave`, and `lokiEndpoint`.
-2. ApplicationSets render those values into Application names, labels, Helm values, source paths, and destinations.
-3. Argo CD syncs the generated Applications to the matching clusters.
-
-## Safe Change Points
-
-| Goal | Edit | Watch for |
-| --- | --- | --- |
-| Add a new cluster-wide add-on | [platform-helm-addons-appset.yaml](platform-helm-addons-appset.yaml) | Pin the chart version and choose a sync wave. |
-| Add an environment overlay | [platform-addons-appset.yaml](platform-addons-appset.yaml) or [kyverno-policies-appset.yaml](kyverno-policies-appset.yaml) | The overlay path must exist for each cluster `environment`. |
-| Add a namespace request field | [tenant-namespaces-appset.yaml](tenant-namespaces-appset.yaml) | Keep the generated Helm `values` YAML valid after templating. |
-| Deploy only to selected clusters | Add or reuse inventory metadata and a selector. | Confirm selector labels match fields from [../clusters/](../clusters/). |
-
-## Sync Waves
-
-Sync waves document the intended order: project first, platform basics next, Kyverno before policies, policies before tenant namespaces, and observability agents after that. For production, combine waves with health checks and review gates instead of relying on ordering alone.
+Sync waves (`argocd.argoproj.io/sync-wave`) document the intended order, but generated Applications are independent: an Application that needs something another one creates (a CRD, a namespace) fails and retries until it is there. `product-apps` and `product-namespaces` set `retry` with backoff for exactly that.

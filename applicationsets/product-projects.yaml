@@ -1,0 +1,40 @@
+# One AppProject per product (on the hub), from products/*/product.yaml.
+# It fences the product's Applications: its own repo, its own namespace,
+# nothing cluster-scoped. See charts/product-project.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: product-projects
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        repoURL: https://github.com/platformengr/fleet-gitops.git
+        revision: main
+        files:
+          - path: products/*/product.yaml
+  template:
+    metadata:
+      name: 'product-{{ .product.name }}-project'
+      labels:
+        fleet.gitops/product: '{{ .product.name }}'
+        fleet.gitops/owner: '{{ .product.owner }}'
+        fleet.gitops/layer: product-baseline
+    spec:
+      project: fleet-platform
+      source:
+        repoURL: https://github.com/platformengr/fleet-gitops.git
+        targetRevision: main
+        path: charts/product-project
+        helm:
+          releaseName: 'product-{{ .product.name }}'
+          values: |-
+            product: {{ toJson .product }}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

@@ -1,8 +1,18 @@
+# dev: workload rules only warn (Audit), so teams can experiment. The baseline
+# protection stays enforced everywhere.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
 resources:
   - ../../base
-  - tenant-dev-limit-range.yaml
-
 labels:
   - pairs:
       environment: dev
       managed-by: argocd
+patches:
+  - target:
+      kind: ClusterPolicy
+      name: require-requests-limits|disallow-latest-tag
+    patch: |-
+      - op: replace
+        path: /spec/validationFailureAction
+        value: Audit

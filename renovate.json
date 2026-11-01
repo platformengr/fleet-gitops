@@ -23,6 +23,21 @@
         "chart: (?<depName>[^\\s]+)\\s+repoURL: (?<registryUrl>[^\\s]+)\\s+targetRevision: (?<currentValue>[^\\s]+)"
       ],
       "datasourceTemplate": "helm"
+    },
+    {
+      "description": "Versions annotated with a '# renovate:' comment (Argo CD chart in Terraform, tools in CI)",
+      "customType": "regex",
+      "fileMatch": [
+        "^infrastructure/.+\\.tf$",
+        "^infrastructure/cloud/lib/.+\\.sh$"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) registryUrl=(?<registryUrl>\\S+)\\s+default\\s*=\\s*\"(?<currentValue>[^\"]+)\"",
+        "ARGOCD_CHART_VERSION=\"?\\$\\{ARGOCD_CHART_VERSION:-(?<currentValue>[^}\"]+)\\}"
+      ],
+      "depNameTemplate": "{{#if depName}}{{depName}}{{else}}argo-cd{{/if}}",
+      "registryUrlTemplate": "{{#if registryUrl}}{{registryUrl}}{{else}}https://argoproj.github.io/argo-helm{{/if}}",
+      "datasourceTemplate": "{{#if datasource}}{{datasource}}{{else}}helm{{/if}}"
     }
   ],
   "packageRules": [
@@ -32,6 +47,13 @@
         "applicationsets/**"
       ],
       "groupName": "platform add-ons"
+    },
+    {
+      "description": "Argo CD and Terraform providers: one PR, platform review",
+      "matchFileNames": [
+        "infrastructure/**"
+      ],
+      "groupName": "infrastructure"
     }
   ]
 }

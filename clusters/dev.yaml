@@ -1,6 +1,11 @@
+# Fleet inventory: one file per workload cluster. Owned by the platform team.
+# Read by Terraform (infrastructure/kind creates every provider: kind entry and
+# registers it with Argo CD, labelled from these fields) and by the platform
+# ApplicationSets (add-ons, policies, agents per cluster).
 name: dev
-server: https://172.18.0.3:6443
+provider: kind
+server: https://dev-control-plane:6443
 environment: dev
 upgradeWave: "0"
 region: local
-lokiEndpoint: http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push
+lokiEndpoint: http://platform-control-plane:31100/loki/api/v1/push

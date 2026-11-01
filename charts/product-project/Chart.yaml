@@ -1,0 +1,5 @@
+apiVersion: v2
+name: product-project
+description: Argo CD AppProject that fences one product's Applications
+type: application
+version: 1.0.0

@@ -1,8 +1,9 @@
+# prod: everything enforced. The same rules run in CI (scripts/validate.sh) so
+# a violation is caught on the pull request, before it reaches the cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
 resources:
   - ../../base
-  - tenant-prod-resource-quota.yaml
-  - tenant-prod-limit-range.yaml
-
 labels:
   - pairs:
       environment: prod

@@ -1,0 +1,65 @@
+# The platform-owned namespace baseline for every product, in every
+# environment it asked for, on every cluster in that environment.
+# Owned by the platform team (project fleet-platform), not by the product.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: product-namespaces
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    # products x their environments x clusters labelled with that environment.
+    # Inner matrix: one parameter set per (product, environment) entry.
+    # Outer matrix: the cluster generator selects registered clusters whose
+    # fleet.gitops/environment label (set by Terraform from clusters/*.yaml)
+    # equals the entry's environment.
+    - matrix:
+        generators:
+          - matrix:
+              generators:
+                - git:
+                    repoURL: https://github.com/platformengr/fleet-gitops.git
+                    revision: main
+                    files:
+                      - path: products/*/product.yaml
+                - list:
+                    elementsYaml: "{{ .product.environments | toJson }}"
+          - clusters:
+              selector:
+                matchLabels:
+                  fleet.gitops/environment: "{{ .environment }}"
+  template:
+    metadata:
+      name: '{{ .product.name }}-{{ .name }}-baseline'
+      labels:
+        fleet.gitops/product: '{{ .product.name }}'
+        fleet.gitops/owner: '{{ .product.owner }}'
+        fleet.gitops/environment: '{{ .environment }}'
+        fleet.gitops/cluster: '{{ .name }}'
+        fleet.gitops/layer: product-baseline
+    spec:
+      project: fleet-platform
+      source:
+        repoURL: https://github.com/platformengr/fleet-gitops.git
+        targetRevision: main
+        path: charts/product-namespace
+        helm:
+          releaseName: '{{ .product.name }}-baseline'
+          values: |-
+            product: {{ toJson .product }}
+            environment: {{ .environment | quote }}
+            size: {{ default "small" .size | quote }}
+      destination:
+        server: '{{ .server }}'
+        namespace: '{{ .product.name }}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m

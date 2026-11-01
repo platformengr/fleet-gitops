@@ -27,10 +27,10 @@ The Alloy config adds labels that make logs usable in a fleet:
 Each cluster declares where Alloy should push logs:
 
 ```yaml
-lokiEndpoint: http://loki-gateway.observability.svc.cluster.local/loki/api/v1/push
+lokiEndpoint: http://platform-control-plane:31100/loki/api/v1/push
 ```
 
-That endpoint is fine for the local reference shape. In real separate clusters, expose Loki through a reachable private path such as internal ingress, private load balancer, service mesh, VPN, or a managed endpoint. A workload cluster usually cannot resolve another cluster's `cluster.local` DNS name.
+On kind, that is the hub node's name on the shared Docker network and the Loki gateway's fixed NodePort. A workload cluster cannot resolve another cluster's `cluster.local` DNS names, so in real separate clusters expose Loki through a reachable private path (internal load balancer, private ingress, service mesh, VPN, or a managed endpoint) and set that URL here.
 
 ## Metrics
 

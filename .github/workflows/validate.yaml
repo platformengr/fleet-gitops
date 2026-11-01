@@ -1,3 +1,6 @@
+# Every pull request: validate everything Argo CD and Terraform will read, and
+# show what the change does to the fleet. Make the "validate" and "plan" checks
+# required in branch protection so nothing invalid can merge.
 name: validate
 
 on:
@@ -15,19 +18,65 @@ jobs:
       HELM_VERSION: v3.16.2
       KUSTOMIZE_VERSION: v5.4.3
       KUBECONFORM_VERSION: v0.6.7
+      KYVERNO_VERSION: v1.12.5
     steps:
       - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
 
       - name: Install tools
         run: |
           mkdir -p "$HOME/bin" && echo "$HOME/bin" >> "$GITHUB_PATH"
-          curl -sSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
             | tar xz -C "$HOME/bin" --strip-components=1 linux-amd64/helm
-          curl -sSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+          curl -fsSL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
             | tar xz -C "$HOME/bin"
-          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+          curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
             | tar xz -C "$HOME/bin" kubeconform
+          curl -fsSL "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/kyverno-cli_${KYVERNO_VERSION}_linux_x86_64.tar.gz" \
+            | tar xz -C "$HOME/bin" kyverno
           sudo apt-get install -y -qq shellcheck
+          pip install --quiet pyyaml jsonschema yamllint
 
-      - name: Validate manifests, charts, inventory and scripts
-        run: ./scripts/validate.sh
+      - name: Validate (YAML, fleet rules, manifests, policies, Terraform, scripts)
+        run: REQUIRE_ALL=1 ./scripts/validate.sh
+
+  plan:
+    # What will Argo CD generate after this merges? Compares the generated
+    # Applications of the pull request with those of the base branch.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base
+      - run: pip install --quiet pyyaml jsonschema
+      - name: Fleet plan
+        run: |
+          if [ -f .base/scripts/fleet_check.py ]; then
+            python3 .base/scripts/fleet_check.py --json base.json --quiet || true
+          fi
+          python3 scripts/fleet_check.py --compare base.json --summary "$GITHUB_STEP_SUMMARY" > plan.md
+      - name: Comment the plan on the pull request
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('plan.md')) return;
+            const marker = '<!-- fleet-plan -->';
+            const body = `${marker}\n${fs.readFileSync('plan.md', 'utf8')}\n\n_Updated for ${context.payload.pull_request.head.sha.slice(0, 7)}._`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const old = comments.find(c => c.body && c.body.startsWith(marker));
+            if (old) await github.rest.issues.updateComment({ owner, repo, comment_id: old.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });

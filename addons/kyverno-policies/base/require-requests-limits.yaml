@@ -1,0 +1,32 @@
+# Every container in a product namespace declares CPU and memory requests and a
+# memory limit, so quotas and scheduling mean something.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-requests-limits
+  annotations:
+    policies.kyverno.io/title: Require requests and limits
+    policies.kyverno.io/category: Best practices
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: containers-have-requests-and-limits
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaceSelector:
+                matchLabels:
+                  fleet.gitops/type: product
+      validate:
+        message: Containers in product namespaces need cpu/memory requests and a memory limit.
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"
