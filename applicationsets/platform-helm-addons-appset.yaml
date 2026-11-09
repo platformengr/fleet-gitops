@@ -41,7 +41,7 @@ spec:
                   namespace: external-secrets
                   chart: external-secrets
                   repoURL: https://charts.external-secrets.io
-                  targetRevision: 0.10.4
+                  targetRevision: 2.14.0
                   syncWave: "4"
                   values: |-
                     installCRDs: true
