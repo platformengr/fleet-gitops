@@ -16,6 +16,16 @@ configs:
     # Report the resource tracking method explicitly; annotation tracking avoids
     # label clashes with Helm charts that set app.kubernetes.io/instance.
     application.resourceTrackingMethod: annotation
+  # Envoy Gateway's chart (platform-helm-addons) is published only to an OCI registry.
+  # Argo CD pulls a Helm chart over OCI only from a repository declared with enableOCI.
+  # Public registry, no credentials: the chart turns this into a repository Secret,
+  # so Git never holds a Secret manifest.
+  repositories:
+    envoyproxy:
+      name: envoyproxy
+      type: helm
+      url: docker.io/envoyproxy
+      enableOCI: "true"
 
 dex:
   enabled: false

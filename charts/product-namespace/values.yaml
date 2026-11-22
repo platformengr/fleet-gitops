@@ -10,7 +10,7 @@ product:
 environment: dev
 size: small
 
-# Namespace the ingress controller runs in (platform-helm-addons).
+# Namespace Envoy Gateway and its Envoy proxies run in (platform-helm-addons).
 ingressNamespace: ingress-system
 
 # Size profiles: quota and container defaults. Product teams pick one; the

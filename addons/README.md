@@ -21,7 +21,7 @@ Kustomize is used in the simple way: a `base` contains shared resources, and eac
 | --- | --- | --- |
 | Platform namespaces | Creates namespaces such as `observability`, `ingress-system`, `cert-manager`, and `kyverno`. | [namespaces/README.md](namespaces/README.md), [../applicationsets/platform-namespaces-appset.yaml](../applicationsets/platform-namespaces-appset.yaml) |
 | cert-manager | Manages certificate lifecycle and CRDs. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
-| ingress-nginx | Provides an ingress controller for HTTP and HTTPS traffic. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
+| Envoy Gateway | Routes HTTP and HTTPS traffic with the Gateway API (`GatewayClass`, `Gateway`, `HTTPRoute`). Replaces ingress-nginx, which was retired in March 2026. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
 | Argo Rollouts | Installs the Rollout CRD and controller for canary releases (course module 07). | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
 | external-secrets | Syncs Kubernetes Secrets from external secret stores. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |
 | metrics-server | Provides Kubernetes resource metrics for `kubectl top` and autoscaling inputs. | [../applicationsets/platform-helm-addons-appset.yaml](../applicationsets/platform-helm-addons-appset.yaml) |

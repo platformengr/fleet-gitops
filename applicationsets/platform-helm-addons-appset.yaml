@@ -23,11 +23,15 @@ spec:
                   syncWave: "1"
                   values: |-
                     installCRDs: true
-                - addon: ingress-nginx
+                # Gateway API controller (ingress-nginx was retired in March 2026).
+                # The chart ships the Gateway API CRDs; the Envoy proxies it creates
+                # for each Gateway run in this namespace too.
+                - addon: envoy-gateway
                   namespace: ingress-system
-                  chart: ingress-nginx
-                  repoURL: https://kubernetes.github.io/ingress-nginx
-                  targetRevision: 4.11.2
+                  chart: gateway-helm
+                  repoURL: docker.io/envoyproxy
+                  # renovate: datasource=docker depName=docker.io/envoyproxy/gateway-helm
+                  targetRevision: v1.10.0
                   syncWave: "2"
                   values: ""
                 - addon: argo-rollouts

@@ -6,7 +6,7 @@ The fleet's templates. [root-app.yaml](../root-app.yaml) syncs this folder; each
 | --- | --- | --- |
 | [fleet-platform-project.yaml](fleet-platform-project.yaml) | AppProject | `fleet-platform`, the project for platform-owned Applications |
 | [platform-namespaces-appset.yaml](platform-namespaces-appset.yaml) | ApplicationSet | `<cluster>-platform-namespaces`: shared platform namespaces |
-| [platform-helm-addons-appset.yaml](platform-helm-addons-appset.yaml) | ApplicationSet | `<cluster>-<addon>`: cert-manager, ingress-nginx, Argo Rollouts, External Secrets, metrics-server, kube-prometheus-stack, Kyverno |
+| [platform-helm-addons-appset.yaml](platform-helm-addons-appset.yaml) | ApplicationSet | `<cluster>-<addon>`: cert-manager, Envoy Gateway, Argo Rollouts, External Secrets, metrics-server, kube-prometheus-stack, Kyverno |
 | [kyverno-policies-appset.yaml](kyverno-policies-appset.yaml) | ApplicationSet | `<cluster>-kyverno-policies`: guardrails, overlay per environment |
 | [observability-agents-appset.yaml](observability-agents-appset.yaml) | ApplicationSet | `<cluster>-observability-agent`: Alloy shipping logs to Loki |
 | [platform-observability.yaml](platform-observability.yaml) | Applications | `platform-loki`, `platform-grafana` on the hub |

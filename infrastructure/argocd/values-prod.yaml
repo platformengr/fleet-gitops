@@ -35,6 +35,16 @@ configs:
     policy.default: role:readonly
     # policy.csv: |
     #   g, platform-team, role:admin
+  # Envoy Gateway's chart (platform-helm-addons) is published only to an OCI registry.
+  # Argo CD pulls a Helm chart over OCI only from a repository declared with enableOCI.
+  # Public registry, no credentials: the chart turns this into a repository Secret,
+  # so Git never holds a Secret manifest.
+  repositories:
+    envoyproxy:
+      name: envoyproxy
+      type: helm
+      url: docker.io/envoyproxy
+      enableOCI: "true"
 
 # Redis HA: 3 replicas with Sentinel + HAProxy. Replaces the single redis.
 redis-ha:
@@ -72,11 +82,8 @@ server:
     - maxSkew: 1
       topologyKey: topology.kubernetes.io/zone
       whenUnsatisfiable: ScheduleAnyway
-    # TODO: expose via ingress/Gateway with a real certificate, ideally on an internal LB.
-    # ingress:
-    #   enabled: true
-    #   ingressClassName: nginx
-    #   tls: true
+    # TODO: expose with a Gateway API HTTPRoute on an internal Gateway (Envoy Gateway,
+    # platform-helm-addons) with a real certificate, ideally on an internal LB.
 
 repoServer:
   autoscaling:

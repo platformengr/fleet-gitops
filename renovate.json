@@ -20,9 +20,19 @@
         "^applicationsets/platform-helm-addons-appset\\.yaml$"
       ],
       "matchStrings": [
-        "chart: (?<depName>[^\\s]+)\\s+repoURL: (?<registryUrl>[^\\s]+)\\s+targetRevision: (?<currentValue>[^\\s]+)"
+        "chart: (?<depName>[^\\s]+)\\s+repoURL: (?<registryUrl>https://[^\\s]+)\\s+targetRevision: (?<currentValue>[^\\s]+)"
       ],
       "datasourceTemplate": "helm"
+    },
+    {
+      "description": "Charts from an OCI registry in the add-on list (Envoy Gateway): a '# renovate:' comment above targetRevision names the image",
+      "customType": "regex",
+      "fileMatch": [
+        "^applicationsets/platform-helm-addons-appset\\.yaml$"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+targetRevision: (?<currentValue>\\S+)"
+      ]
     },
     {
       "description": "Versions annotated with a '# renovate:' comment (Argo CD chart in Terraform, tools in CI)",
